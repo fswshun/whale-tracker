@@ -53,6 +53,19 @@ CHAINS = {
                   "native": "ETH", "dex": "arbitrum", "wnative": "0x82af49447d8a07e3bd95bd0d56f35241523fbbe2"},
 }
 STABLES = {"USDC", "USDT", "USDG", "USD1", "DAI", "FDUSD", "BUSD"}
+# 本物のステーブルだけ $1 固定。偽 USDT 等のエアドロップ（アドレスポイズニング）を $ 換算しないための一覧
+KNOWN_STABLES = {
+    ("bsc", "0x55d398326f99059ff775485246999027b3197955"), ("bsc", "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d"),
+    ("bsc", "0xe9e7cea3dedca5984780bafc599bd69add087d56"), ("bsc", "0xc5f0f7b66764f6ec8c8dff7ba683102295e16409"),
+    ("bsc", "0x8d0d000ee44948fc98c9b98a4fa4921476f08b0d"), ("bsc", "0x1af3f329e8be154074d8769d1ffa4ee058b1dbc3"),
+    ("ethereum", "0xdac17f958d2ee523a2206206994597c13d831ec7"), ("ethereum", "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"),
+    ("ethereum", "0x6b175474e89094c44da98b954eedeac495271d0f"), ("ethereum", "0xe343167631d89b6ffc58b88d6b7fb0228795491d"),
+    ("ethereum", "0x8d0d000ee44948fc98c9b98a4fa4921476f08b0d"),
+    ("base", "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"),
+    ("arbitrum", "0xaf88d065e77c8cc2239327c5edb3a432268e5831"), ("arbitrum", "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9"),
+    ("robinhood", "0x5fc5360d0400a0fd4f2af552add042d716f1d168"),
+}
+MIN_LIQ_USD = 5000     # DexScreener の流動性がこれ未満のペアの価格は使わない（偽トークン・ゴミ価格対策）
 THRESHOLD = float(CFG.get("threshold_usd", 10000))
 GAS_SEED_USD = float(CFG.get("gas_seed_usd", 20))        # これ未満のネイティブ送金を未知EOAへ → 新ウォレット開設シグナル
 BUY_MATCH_HOURS = int(CFG.get("buy_match_hours", 168))    # 受取前この時間内（7日）に同じ相手へ原資を払っていれば「購入」
@@ -397,7 +410,7 @@ _px = {}
 def price(chain, symbol, contract):
     mp = CFG.get("manual_prices", {})
     if symbol in mp: return float(mp[symbol])
-    if symbol in STABLES: return 1.0
+    if symbol in STABLES and (chain, (contract or "").lower()) in KNOWN_STABLES: return 1.0
     c = CHAINS[chain]
     if contract == "native":
         if c.get("wnative"): chain, contract = chain, c["wnative"]
@@ -411,7 +424,7 @@ def price(chain, symbol, contract):
     if isinstance(j, list) and j:
         try:
             best = max(j, key=lambda p: float((p.get("liquidity") or {}).get("usd") or 0))
-            px = float(best["priceUsd"])
+            px = float(best["priceUsd"]) if float((best.get("liquidity") or {}).get("usd") or 0) >= MIN_LIQ_USD else None
         except Exception: px = None
     _px[key] = px
     return px
@@ -519,6 +532,8 @@ def run():
                               cp=cp, cp_label=label(cp) if cp else "")
                     if d == "IN" and usd is not None and usd < DUST_USD and not is_watched(cp):
                         ev["kind"] = "ダスト"
+                    if d == "IN" and not r["native"] and not is_watched(cp) and not is_service(cp) and (not r["token"].isascii() or usd is None and r["token"].upper() in ("BNB", "ETH", "WBNB", "WETH", "USDT", "USDC")):
+                        ev["kind"] = "ダスト"     # 偽ネイティブ/偽ステーブルのばら撒き（アドレスポイズニング）
                     # 新ウォレット検出: 未知EOAへのガス種銭 or 単純トークン送金（スワップは分類段階で除外済み）
                     if ev["kind"] == "外部へ送金" and cp and d == "OUT" and (now_ts - r["ts"]) < CHILD_MAX_AGE_D * 86400:
                         seed = r["native"] and (usd or 0) < GAS_SEED_USD
