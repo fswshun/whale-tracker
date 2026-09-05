@@ -301,7 +301,7 @@ def nr_rows(chain, addr, from_block, to_block):
         key = (t.get("hash"), cat, frm, to, round(amount, 12))
         if key in seen: continue
         seen.add(key)
-        base = dict(chain=chain, tx=t.get("hash"), block=hx(t.get("blockNum")) or 0, ts=nr_ts(t.get("blockTimestamp")), frm=frm, to=to, amount=amount)
+        base = dict(chain=chain, tx=t.get("hash"), block=hx(t.get("blockNum")) or 0, ts=nr_ts(t.get("blockTimeStamp") or t.get("blockTimestamp")), frm=frm, to=to, amount=amount)
         if cat == "20":
             rows.append(dict(base, token=t.get("asset") or "?", contract=(t.get("contractAddress") or "").lower(), native=False))
         elif cat == "internal":
@@ -600,10 +600,12 @@ def notify(new_events, holdings):
     if not notable: log("通知対象なし"); return
     pages = CFG.get("pages_url", "")
     lines = ["🐋 クジラ動きました"]
+    shown_tx = set()
     for e in [e for e in notable if e["kind"] == "内部移動" and e["dir"] == "OUT"]:
         base = main_holding_of(e["token"], holdings) + (e["amount"] if wallets[e["wallet"]]["role"] == "本体" else 0)
         pct = f"（本体保有の{e['amount'] / base * 100:.1f}%）" if base else ""
-        lines.append(f"↪ {e['time'][5:16]} {label(e['wallet'])} → {e['cp_label']}: {e['token']} {e['amount']:,.0f} ≈ ${(e['usd'] or 0):,.0f}{pct}")
+        lines.append(f"↪ {e['time'][5:16]} {label(e['wallet'])} → {e['cp_label']}: {e['token']} {e['amount']:,.4g} ≈ ${(e['usd'] or 0):,.0f}{pct}")
+        shown_tx.add(e["tx"])
     for b in batches(notable):
         base = main_holding_of(b["token"], holdings)
         pct = f" 本体保有比{b['amount'] / (base + b['amount']) * 100:.1f}%" if base else ""
@@ -614,7 +616,7 @@ def notify(new_events, holdings):
             lines.append(f"🟢 {e['kind']} {e['time'][5:16]} {label(e['wallet'])} {e['token']} {e['amount']:,.0f} ≈ ${(e['usd'] or 0):,.0f} ← {e['cp_label']}{fund}")
         elif e["kind"] == "新ウォレット開設(ガス種銭)":
             lines.append(f"🆕 新ウォレット {e['cp_label']} に種銭 {e['amount']:.4f} {e['token']}（{label(e['wallet'])}から）→ 監視に追加")
-        elif e["kind"] == "内部移動" and e["dir"] == "IN" and e["contract"] == "native":
+        elif e["kind"] == "内部移動" and e["dir"] == "IN" and e["contract"] == "native" and e["tx"] not in shown_tx:
             lines.append(f"💰 代金戻り {e['time'][5:16]} {label(e['wallet'])} ← {e['cp_label']}: {e['amount']:,.2f} {e['token']} ≈ ${(e['usd'] or 0):,.0f}")
         elif e["kind"] in ("サービスへ送金", "外部へ送金"):
             lines.append(f"📤 {e['kind']} {e['time'][5:16]} {label(e['wallet'])} → {e['cp_label']}: {e['amount']:,.4g} {e['token']} ≈ ${(e['usd'] or 0):,.0f}")
