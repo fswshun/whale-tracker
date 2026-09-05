@@ -1,0 +1,16 @@
+{
+  "0xde52c75041371b5e08d8a50b82c63734850628c1": {
+    "role": "本体",
+    "parent": null,
+    "first_seen": null,
+    "chains": []
+  },
+  "0xa9734d098d90c45bfc768ecdd5974e9460bbd4fb": {
+    "role": "子",
+    "parent": "0xde52c75041371b5e08d8a50b82c63734850628c1",
+    "first_seen": "2026-09-05T16:30:09+00:00",
+    "chains": [
+      "bsc"
+    ]
+  }
+}

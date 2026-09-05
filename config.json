@@ -1,0 +1,22 @@
+{
+  "main_wallets": [
+    "0xDE52C75041371b5E08d8a50b82C63734850628C1"
+  ],
+  "chains": [],
+  "threshold_usd": 10000,
+  "pages_url": "https://<GitHubユーザー名>.github.io/whale-tracker/",
+  "initial_lookback_hours": 120,
+  "holdings_every_n_runs": 4,
+  "secondary_chains_every_n_runs": 4,
+  "primary_chains": [
+    "robinhood",
+    "bsc"
+  ],
+  "notify_max_age_hours": 48,
+  "child_detect_max_age_days": 30,
+  "labels": {
+    "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5": "KyberSwap Meta Aggregation Router v2",
+    "0x00AA4aB6FE002A58EC8E576b1827eCb9cf524c71": "0x00AA系サービス（BNB払い→Robinhood側でトークン受取。ブリッジ/クロスチェーンスワップ推定）"
+  },
+  "manual_prices": {}
+}

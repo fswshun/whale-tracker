@@ -1,0 +1,643 @@
+#!/usr/bin/env python3
+"""
+tracker.py — クジラ資金フロー自動追跡（GitHub Actions 常駐用）
+
+1回の実行で:
+  - config.json の本体ウォレットを、活動のある全チェーンで取得（初回はチェーン自動探索）
+  - 新しい tx を分類 → data/events.jsonl に追記（重複なし）
+  - 子ウォレット（未知EOAへのガス種銭 / トークン送金）を自動検出 → data/wallets.json に登録
+  - 現在残高を取得・USD換算 → data/holdings.json（holdings_every_n_runs 回に1回更新）
+  - しきい値以上の新イベントを Telegram に送信
+  - docs/index.html を再生成（GitHub Pages で閲覧）
+
+データ取得元（すべて無料枠）:
+  Robinhood Chain / Ethereum / Base / Arbitrum → Blockscout 公開インスタンス（キー不要）
+  BSC → NodeReal MegaNode（無料プラン、NODEREAL_KEY 必須）
+  価格 → DexScreener（キー不要）＋ Blockscout の exchange_rate
+
+必要な環境変数（GitHub Secrets）:
+  NODEREAL_KEY     https://dashboard.nodereal.io で作る無料キー（BSC 用）
+  BLOCKSCOUT_KEY   推奨。https://dev.blockscout.com の無料 PRO キー（100K credits/日・5 RPS）。無いと公開インスタンスの 429 に当たりやすい
+  TG_TOKEN, TG_CHAT  Telegram 通知（無ければ通知だけスキップ）
+  DRY_RUN=1        ローカル確認用: 通知もファイル保存もしない
+"""
+import json, os, re, sys, time
+from collections import defaultdict
+from datetime import datetime, timezone
+from pathlib import Path
+
+import requests
+
+ROOT = Path(__file__).resolve().parent
+DATA, DOCS = ROOT / "data", ROOT / "docs"
+DATA.mkdir(exist_ok=True); DOCS.mkdir(exist_ok=True)
+
+CFG = json.load(open(ROOT / "config.json"))
+NODEREAL_KEY = os.getenv("NODEREAL_KEY", "")
+BLOCKSCOUT_KEY = os.getenv("BLOCKSCOUT_KEY", "")   # 推奨。dev.blockscout.com の無料 PRO キー（proapi_…）。無いと各インスタンスの公開APIを叩き 429 になりやすい
+BLOCKSCOUT_PRO = "https://api.blockscout.com"
+TG_TOKEN, TG_CHAT = os.getenv("TG_TOKEN"), os.getenv("TG_CHAT")
+DRY_RUN = os.getenv("DRY_RUN", "") not in ("", "0")
+
+WETH_ETH = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+CHAINS = {
+    "robinhood": {"name": "Robinhood Chain", "provider": "blockscout", "base": "https://robinhoodchain.blockscout.com", "chain_id": 4663,
+                  "native": "ETH", "dex": "robinhood", "wnative": "", "native_ref": ("ethereum", WETH_ETH)},
+    "bsc":       {"name": "BSC", "provider": "nodereal", "rpc": "https://bsc-mainnet.nodereal.io/v1/{key}",
+                  "native": "BNB", "dex": "bsc", "wnative": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"},
+    "ethereum":  {"name": "Ethereum", "provider": "blockscout", "base": "https://eth.blockscout.com", "chain_id": 1,
+                  "native": "ETH", "dex": "ethereum", "wnative": WETH_ETH},
+    "base":      {"name": "Base", "provider": "blockscout", "base": "https://base.blockscout.com", "chain_id": 8453,
+                  "native": "ETH", "dex": "base", "wnative": "0x4200000000000000000000000000000000000006"},
+    "arbitrum":  {"name": "Arbitrum", "provider": "blockscout", "base": "https://arbitrum.blockscout.com", "chain_id": 42161,
+                  "native": "ETH", "dex": "arbitrum", "wnative": "0x82af49447d8a07e3bd95bd0d56f35241523fbbe2"},
+}
+STABLES = {"USDC", "USDT", "USDG", "USD1", "DAI", "FDUSD", "BUSD"}
+THRESHOLD = float(CFG.get("threshold_usd", 10000))
+GAS_SEED_USD = float(CFG.get("gas_seed_usd", 20))        # これ未満のネイティブ送金を未知EOAへ → 新ウォレット開設シグナル
+BUY_MATCH_HOURS = int(CFG.get("buy_match_hours", 168))    # 受取前この時間内（7日）に同じ相手へ原資を払っていれば「購入」
+DUST_USD = float(CFG.get("dust_usd", 50))                 # これ未満の受取はダスト扱い（通知しない）
+INITIAL_LOOKBACK_H = float(CFG.get("initial_lookback_hours", 120))   # 初回・新ウォレット追加時の遡り時間（全チェーン）
+HOLDINGS_EVERY = int(CFG.get("holdings_every_n_runs", 4))            # 残高更新の間隔（実行回数）
+SECONDARY_EVERY = int(CFG.get("secondary_chains_every_n_runs", 4))   # 副次チェーン(ETH/Base/Arb)の取得間隔（実行回数）
+PRIMARY_CHAINS = set(CFG.get("primary_chains", ["robinhood", "bsc"]))    # 毎回取得するチェーン
+NOTIFY_MAX_AGE_H = float(CFG.get("notify_max_age_hours", 48))        # これより古いイベントは通知しない（初回バックフィル対策）
+CHILD_MAX_AGE_D = float(CFG.get("child_detect_max_age_days", 30))    # これより古い送金からは子ウォレットを起こさない
+SERVICE_PREFIX = re.compile(r"^0x00aa", re.I)
+BLOCKSCOUT_PAGE = 10000
+
+S = requests.Session()
+S.headers.update({"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36",
+                  "Accept": "application/json"})   # Blockscout の Cloudflare は素の requests UA を 403 にする
+
+def log(*a): print(*a, flush=True)
+def warn(*a): print("警告:", *a, file=sys.stderr, flush=True)
+
+# ------------------------------------------------------------ 永続データ
+def jload(p, default):
+    return json.load(open(p)) if p.exists() else default
+
+wallets = jload(DATA / "wallets.json", {})        # addr -> {role,parent,first_seen,chains}
+seen_tx = set(jload(DATA / "seen_tx.json", []))
+cursor = jload(DATA / "cursor.json", {})          # f"{chain}:{addr}" -> last block
+state = jload(DATA / "state.json", {"run_count": 0})
+pending_eoa = jload(DATA / "pending_eoa.json", [])  # EOA判定が取れなかった候補（次回再判定）
+events = [json.loads(l) for l in open(DATA / "events.jsonl")] if (DATA / "events.jsonl").exists() else []
+labels = {k.lower(): v for k, v in CFG.get("labels", {}).items()}
+
+for a in CFG["main_wallets"]:
+    wallets.setdefault(a.lower(), {"role": "本体", "parent": None, "first_seen": None, "chains": []})
+
+def is_watched(a): return bool(a) and a.lower() in wallets
+def is_service(a): return bool(a) and (a.lower() in labels or bool(SERVICE_PREFIX.match(a)))
+def short(a): return a[:6] + "…" + a[-4:] if a else ""
+def label(a):
+    a = (a or "").lower()
+    if a in labels: return labels[a]
+    if a in wallets: return f"{wallets[a]['role']} {short(a)}"
+    if SERVICE_PREFIX.match(a): return f"0x00AA系サービス {short(a)}"
+    return short(a)
+def child_role(parent_role): return {"本体": "子", "子": "孫", "孫": "曾孫"}.get(parent_role, "子孫")
+
+# ------------------------------------------------------------ HTTP 共通
+def http_json(method, url, retries=3, timeout=30, **kw):
+    """JSON を返す。失敗（429 / 5xx / Cloudflare challenge / 例外）は退避して再試行、最終的に None"""
+    last = ""
+    for i in range(retries):
+        try:
+            r = S.request(method, url, timeout=timeout, **kw)
+            if r.status_code == 429:
+                last = f"HTTP 429 {r.text[:80]!r}"; time.sleep(6 * (i + 1)); continue
+            if r.status_code in (500, 502, 503, 504) or r.headers.get("cf-mitigated") == "challenge":
+                last = f"HTTP {r.status_code} {r.text[:80]!r}"; time.sleep(3 * (i + 1)); continue
+            if not r.ok: last = f"HTTP {r.status_code} {r.text[:120]!r}"; time.sleep(1 + i); continue
+            return r.json()
+        except Exception as e:
+            last = repr(e); time.sleep(3 * (i + 1))
+    warn(f"{method} {url.split('?')[0]} 失敗: {last}")
+    return None
+
+# ------------------------------------------------------------ Blockscout（Etherscan互換 + v2）
+def bs_compat_url(chain, params):
+    """Etherscan互換API の (url, params)。PRO キーがあれば統一ホスト、無ければ各インスタンス"""
+    if BLOCKSCOUT_KEY:
+        return BLOCKSCOUT_PRO + "/v2/api", {"chain_id": CHAINS[chain]["chain_id"], "apikey": BLOCKSCOUT_KEY, **params}
+    return CHAINS[chain]["base"] + "/api", dict(params)
+
+def bs_v2_url(chain, path, params=None):
+    if BLOCKSCOUT_KEY:
+        return f"{BLOCKSCOUT_PRO}/{CHAINS[chain]['chain_id']}/api/v2{path}", {"apikey": BLOCKSCOUT_KEY, **(params or {})}
+    return CHAINS[chain]["base"] + "/api/v2" + path, dict(params or {})
+
+def bs_compat(chain, params):
+    """互換API。成功→list/str、'該当なし'→[]、失敗→None"""
+    time.sleep(0.4)
+    url, p = bs_compat_url(chain, params)
+    j = http_json("GET", url, params=p)
+    if j is None or not isinstance(j, dict): return None
+    st, msg, res = str(j.get("status")), str(j.get("message", "")), j.get("result")
+    if st == "1": return res if res is not None else []
+    if "No transactions" in msg or "No internal" in msg or res == []: return []
+    if st == "2" and isinstance(res, list): return res     # 内部tx未処理分ありの部分成功
+    warn(f"{chain} compat {params.get('action')}: {msg} {str(res)[:80]}")
+    return None
+
+def bs_compat_all(chain, params):
+    """互換APIのページング（offset 上限 10000 × 最大 5 ページ）"""
+    out = []
+    for page in range(1, 6):
+        res = bs_compat(chain, {**params, "page": page, "offset": BLOCKSCOUT_PAGE})
+        if res is None: return None
+        out.extend(res)
+        if len(res) < BLOCKSCOUT_PAGE: break
+    return out
+
+def bs_v2(chain, path, params=None):
+    time.sleep(0.4)
+    url, p = bs_v2_url(chain, path, params)
+    return http_json("GET", url, params=p)
+
+def bs_latest_block(chain):
+    url, p = bs_compat_url(chain, {"module": "block", "action": "eth_block_number"})
+    j = http_json("GET", url, params=p)
+    try: return int(j["result"], 16)
+    except Exception: pass
+    j = bs_v2(chain, "/main-page/blocks")
+    try: return int(j[0]["height"])
+    except Exception: return None
+
+def bs_lookback_blocks(chain, hours):
+    j = bs_v2(chain, "/stats")
+    try: sec = float(j["average_block_time"]) / 1000
+    except Exception: sec = 2.0
+    return int(hours * 3600 / max(sec, 0.1))
+
+def bs_rows(chain, addr, since_block):
+    rows = []
+    base = {"module": "account", "address": addr, "startblock": since_block, "endblock": 99999999, "sort": "asc"}
+    tok = bs_compat_all(chain, {**base, "action": "tokentx"})
+    txs = bs_compat_all(chain, {**base, "action": "txlist"})
+    itx = bs_compat_all(chain, {**base, "action": "txlistinternal"})
+    if tok is None or txs is None or itx is None: return None
+    for t in tok:
+        dec = int(t.get("tokenDecimal") or 18)
+        rows.append(dict(chain=chain, tx=t["hash"], block=int(t["blockNumber"]), ts=int(t["timeStamp"]),
+                         frm=t["from"].lower(), to=(t.get("to") or "").lower(), token=t.get("tokenSymbol") or "?",
+                         contract=t["contractAddress"].lower(), amount=int(t["value"]) / 10 ** dec, native=False))
+    for t in txs:
+        if str(t.get("isError", "0")) == "1" or str(t.get("txreceipt_status", "1")) == "0": continue
+        v = int(t.get("value") or 0); inp = t.get("input") or "0x"
+        row = dict(chain=chain, tx=t["hash"], block=int(t["blockNumber"]), ts=int(t["timeStamp"]),
+                   frm=t["from"].lower(), to=(t.get("to") or "").lower(), token=CHAINS[chain]["native"],
+                   contract="native", amount=v / 1e18, native=True,
+                   method=(t.get("functionName") or t.get("methodId") or ""), is_contract_call=inp not in ("0x", ""))
+        if v > 0 or row["is_contract_call"]: rows.append(row)
+    for t in itx:
+        v = int(t.get("value") or 0)
+        if v > 0 and str(t.get("isError", "0")) != "1":
+            rows.append(dict(chain=chain, tx=t.get("hash") or t.get("transactionHash"), block=int(t["blockNumber"]), ts=int(t["timeStamp"]),
+                             frm=t["from"].lower(), to=(t.get("to") or "").lower(), token=CHAINS[chain]["native"],
+                             contract="native", amount=v / 1e18, native=True, internal=True))
+    return rows
+
+def bs_is_contract(chain, addr):
+    j = bs_v2(chain, f"/addresses/{addr}")
+    if isinstance(j, dict) and "is_contract" in j: return bool(j["is_contract"])
+    return None
+
+def bs_holdings(chain, addr):
+    h = {}
+    j = bs_v2(chain, f"/addresses/{addr}")
+    if isinstance(j, dict) and j.get("coin_balance") is not None:
+        h[CHAINS[chain]["native"]] = {"amount": int(j["coin_balance"]) / 1e18, "contract": "native",
+                                      "price": float(j["exchange_rate"]) if j.get("exchange_rate") else None}
+    else:
+        bal = bs_compat(chain, {"module": "account", "action": "balance", "address": addr, "tag": "latest"})
+        if isinstance(bal, str) and bal.isdigit():
+            h[CHAINS[chain]["native"]] = {"amount": int(bal) / 1e18, "contract": "native", "price": None}
+    params, ok = {"type": "ERC-20"}, True
+    for _ in range(10):
+        j = bs_v2(chain, f"/addresses/{addr}/tokens", params)
+        if not isinstance(j, dict) or "items" not in j: ok = False; break
+        for it in j["items"]:
+            tk = it["token"]; dec = int(tk.get("decimals") or 18)
+            amt = int(it["value"]) / 10 ** dec
+            if amt > 0:
+                h[tk.get("symbol") or "?"] = {"amount": amt, "contract": (tk.get("address") or tk.get("address_hash") or "").lower(),
+                                              "price": float(tk["exchange_rate"]) if tk.get("exchange_rate") else None}
+        if not j.get("next_page_params"): break
+        params = {"type": "ERC-20", **j["next_page_params"]}
+    if not ok:   # v2 が落ちている時は tokentx 全履歴の差引で代用
+        warn(f"{chain} v2 tokens 取得不可 → tokentx 差引で代用 {short(addr)}")
+        net = defaultdict(float); meta = {}
+        for t in bs_compat_all(chain, {"module": "account", "action": "tokentx", "address": addr, "startblock": 0, "endblock": 99999999, "sort": "asc"}) or []:
+            dec = int(t.get("tokenDecimal") or 18); k = t["contractAddress"].lower(); v = int(t["value"]) / 10 ** dec
+            net[k] += v if t["to"].lower() == addr.lower() else -v; meta[k] = t.get("tokenSymbol") or "?"
+        for k, v in net.items():
+            if v > 1e-9: h[meta[k]] = {"amount": v, "contract": k, "price": None}
+    return h
+
+def bs_has_activity(chain, addr):
+    res = bs_compat(chain, {"module": "account", "action": "txlist", "address": addr, "page": 1, "offset": 1, "sort": "desc"})
+    if res: return True
+    res = bs_compat(chain, {"module": "account", "action": "tokentx", "address": addr, "page": 1, "offset": 1, "sort": "desc"})
+    return bool(res)
+
+# ------------------------------------------------------------ NodeReal（BSC）
+def nr_rpc(chain, method, params):
+    if not NODEREAL_KEY: return None
+    j = http_json("POST", CHAINS[chain]["rpc"].format(key=NODEREAL_KEY), json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
+    if not isinstance(j, dict): return None
+    if "error" in j: warn(f"{chain} {method}: {j['error']}"); return None
+    return j.get("result")
+
+def hx(v):
+    """hex / 10進文字列 / 数値 → int"""
+    if v is None: return None
+    if isinstance(v, (int, float)): return int(v)
+    s = str(v).strip()
+    return int(s, 16) if s.startswith("0x") else int(float(s))
+
+def nr_ts(v):
+    if v is None: return 0
+    s = str(v)
+    if s.startswith("0x"): return int(s, 16)
+    if s.isdigit(): return int(s)
+    try: return int(datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp())
+    except Exception: return 0
+
+_nr_sample_logged = False
+def nr_transfers(chain, addr, from_block, to_block):
+    """nr_getAssetTransfers を from/to 両方向・100k ブロック窓・pageKey で全件取得。失敗→None"""
+    global _nr_sample_logged
+    out = []
+    for side in ("fromAddress", "toAddress"):
+        lo = from_block
+        while lo <= to_block:
+            hi = min(lo + 99_999, to_block); page_key = None
+            while True:
+                p = {"category": ["external", "internal", "20"], "fromBlock": hex(lo), "toBlock": hex(hi), "order": "asc", "maxCount": "0x3E8", side: addr}
+                if page_key: p["pageKey"] = page_key
+                res = nr_rpc(chain, "nr_getAssetTransfers", [p])
+                if res is None: return None
+                trs = res.get("transfers") or []
+                if trs and not _nr_sample_logged: log("NodeReal transfer サンプル:", json.dumps(trs[0])[:400]); _nr_sample_logged = True
+                out.extend(trs)
+                page_key = res.get("pageKey")
+                if not page_key or not trs: break
+            lo = hi + 1
+    return out
+
+def nr_rows(chain, addr, from_block, to_block):
+    trs = nr_transfers(chain, addr, from_block, to_block)
+    if trs is None: return None
+    rows, seen = [], set()
+    for t in trs:
+        if str(t.get("receiptsStatus", "1")) == "0": continue
+        cat = t.get("category"); frm = (t.get("from") or "").lower(); to = (t.get("to") or "").lower()
+        raw = t.get("value"); dec = hx(t.get("decimal")) if t.get("decimal") is not None else 18
+        try: amount = hx(raw) / 10 ** dec if isinstance(raw, str) and raw.startswith("0x") else float(raw or 0)
+        except Exception: amount = 0.0
+        key = (t.get("hash"), cat, frm, to, round(amount, 12))
+        if key in seen: continue
+        seen.add(key)
+        base = dict(chain=chain, tx=t.get("hash"), block=hx(t.get("blockNum")) or 0, ts=nr_ts(t.get("blockTimestamp")), frm=frm, to=to, amount=amount)
+        if cat == "20":
+            rows.append(dict(base, token=t.get("asset") or "?", contract=(t.get("contractAddress") or "").lower(), native=False))
+        elif cat == "internal":
+            if amount > 0: rows.append(dict(base, token=CHAINS[chain]["native"], contract="native", native=True, internal=True))
+        else:
+            if amount > 0: rows.append(dict(base, token=CHAINS[chain]["native"], contract="native", native=True))
+    # 各 tx の input を見て「コントラクト呼出か」を補う（新規 tx は少数なので都度取得）
+    for tx in {r["tx"] for r in rows if r["tx"]}:
+        t = nr_rpc(chain, "eth_getTransactionByHash", [tx])
+        if not isinstance(t, dict): continue
+        inp = t.get("input") or "0x"
+        if (t.get("from") or "").lower() == addr.lower() and inp not in ("0x", ""):
+            blk = hx(t.get("blockNumber")) or 0; ts = next((r["ts"] for r in rows if r["tx"] == tx), 0)
+            rows.append(dict(chain=chain, tx=tx, block=blk, ts=ts, frm=addr.lower(), to=(t.get("to") or "").lower(), token=CHAINS[chain]["native"],
+                             contract="native", amount=0.0, native=True, is_contract_call=True, method=inp[:10]))
+    return rows
+
+def nr_block_number(chain): return hx(nr_rpc(chain, "eth_blockNumber", []))
+
+def nr_lookback_blocks(chain, latest, hours):
+    """直近1万ブロックの平均ブロック時間から遡りブロック数を出す"""
+    a = nr_rpc(chain, "eth_getBlockByNumber", [hex(latest), False]); b = nr_rpc(chain, "eth_getBlockByNumber", [hex(latest - 10000), False])
+    try: sec = (hx(a["timestamp"]) - hx(b["timestamp"])) / 10000
+    except Exception: sec = 0.75
+    return int(hours * 3600 / max(sec, 0.1))
+
+def nr_is_contract(chain, addr):
+    code = nr_rpc(chain, "eth_getCode", [addr, "latest"])
+    if code is None: return None
+    return code not in ("0x", "")
+
+def nr_holdings(chain, addr):
+    h = {}
+    bal = nr_rpc(chain, "eth_getBalance", [addr, "latest"])
+    if bal is not None: h[CHAINS[chain]["native"]] = {"amount": hx(bal) / 1e18, "contract": "native", "price": None}
+    page = 1
+    while page <= 10:
+        res = nr_rpc(chain, "nr_getTokenHoldings", [addr, hex(page), "0x64"])
+        if not isinstance(res, dict): break
+        det = res.get("details") or []
+        for d in det:
+            dec = hx(d.get("tokenDecimals")) if d.get("tokenDecimals") is not None else 18
+            amt = (hx(d.get("tokenBalance")) or 0) / 10 ** dec
+            if amt > 0: h[d.get("tokenSymbol") or "?"] = {"amount": amt, "contract": (d.get("tokenAddress") or "").lower(), "price": None}
+        if len(det) < 100 or page * 100 >= (hx(res.get("totalCount")) or 0): break
+        page += 1
+    return h
+
+def nr_has_activity(chain, addr):
+    latest = nr_block_number(chain)
+    if not latest: return None
+    lb = nr_lookback_blocks(chain, latest, INITIAL_LOOKBACK_H)
+    trs = nr_transfers(chain, addr, max(0, latest - lb), latest)
+    return None if trs is None else bool(trs)
+
+# ------------------------------------------------------------ プロバイダ振り分け
+def provider(chain): return CHAINS[chain]["provider"]
+def chain_available(chain): return provider(chain) != "nodereal" or bool(NODEREAL_KEY)
+
+def fetch_rows(chain, addr):
+    """新規行を取得し (rows, new_cursor) を返す。失敗なら (None, None) でカーソルは進めない"""
+    key = f"{chain}:{addr}"
+    if provider(chain) == "blockscout":
+        if key in cursor: since = cursor[key] + 1
+        else:
+            latest = bs_latest_block(chain)
+            if not latest: return None, None
+            since = max(0, latest - bs_lookback_blocks(chain, INITIAL_LOOKBACK_H))
+        rows = bs_rows(chain, addr, since)
+        if rows is None: return None, None
+        return rows, (max(r["block"] for r in rows) if rows else cursor.get(key, since - 1))
+    latest = nr_block_number(chain)
+    if not latest: return None, None
+    if key in cursor: lo = cursor[key] + 1
+    else: lo = max(0, latest - nr_lookback_blocks(chain, latest, INITIAL_LOOKBACK_H))
+    if lo > latest: return [], cursor.get(key)
+    rows = nr_rows(chain, addr, lo, latest)
+    if rows is None: return None, None
+    return rows, latest
+
+def is_contract(chain, addr):
+    for _ in range(2):
+        r = bs_is_contract(chain, addr) if provider(chain) == "blockscout" else nr_is_contract(chain, addr)
+        if r is not None: return r
+        time.sleep(2)
+    return None
+
+def fetch_holdings(chain, addr): return bs_holdings(chain, addr) if provider(chain) == "blockscout" else nr_holdings(chain, addr)
+def has_activity(chain, addr): return bs_has_activity(chain, addr) if provider(chain) == "blockscout" else nr_has_activity(chain, addr)
+
+# ------------------------------------------------------------ 価格
+_px = {}
+def price(chain, symbol, contract):
+    mp = CFG.get("manual_prices", {})
+    if symbol in mp: return float(mp[symbol])
+    if symbol in STABLES: return 1.0
+    c = CHAINS[chain]
+    if contract == "native":
+        if c.get("wnative"): chain, contract = chain, c["wnative"]
+        elif c.get("native_ref"): chain, contract = c["native_ref"]
+        else: return None
+    if not contract: return None
+    key = (chain, contract.lower())
+    if key in _px: return _px[key]
+    px = None
+    j = http_json("GET", f"https://api.dexscreener.com/tokens/v1/{CHAINS[chain]['dex']}/{contract}", retries=2)
+    if isinstance(j, list) and j:
+        try:
+            best = max(j, key=lambda p: float((p.get("liquidity") or {}).get("usd") or 0))
+            px = float(best["priceUsd"])
+        except Exception: px = None
+    _px[key] = px
+    return px
+
+# ------------------------------------------------------------ 分類
+def classify_tx(chain, owner, trs):
+    outs = [r for r in trs if r["frm"] == owner and r["amount"] > 0]
+    ins = [r for r in trs if r["to"] == owner and r["amount"] > 0]
+    tok_out = [r for r in outs if not r["native"]]; tok_in = [r for r in ins if not r["native"]]
+    nat_out = [r for r in outs if r["native"]]; nat_in = [r for r in ins if r["native"]]
+    token_contracts = {r["contract"] for r in tok_out + tok_in}
+    # 単なる transfer() はトークンコントラクト自身への呼出なので「スワップ等の呼出」から除く
+    calls = [r for r in trs if r.get("is_contract_call") and r["to"] not in token_contracts]
+    cps = {(r["to"] if r["frm"] == owner else r["frm"]) for r in outs + ins if (r["to"] if r["frm"] == owner else r["frm"]) != owner}
+    cp = max(cps, key=lambda a: (is_watched(a), is_service(a))) if cps else (calls[0]["to"] if calls else "")
+    if tok_out and (nat_in or tok_in):
+        kind = "売却(スワップ)" if not tok_in or any(r["token"] in STABLES for r in tok_in) else "スワップ"
+    elif tok_in and (nat_out or any(r["token"] in STABLES for r in tok_out)):
+        kind = "購入(スワップ)"
+    elif tok_out and calls and not is_watched(cp):
+        kind = "売却(スワップ・代金不明)"
+    elif tok_out or nat_out:
+        if is_watched(cp): kind = "内部移動"
+        elif is_service(cp): kind = "サービスへ送金"
+        else: kind = "外部へ送金"
+    elif tok_in or nat_in:
+        if is_watched(cp): kind = "内部移動"
+        elif is_service(cp): kind = "サービスから受取"
+        else: kind = "受取"
+    else:
+        kind = "コントラクト呼出"
+    return kind, outs, ins, cp
+
+def resolve_purchases(evs):
+    """サービスからの受取に対し、全チェーン横断で「同じ相手へ原資を払ったか」を後付けで判定"""
+    pays = [e for e in evs if e["dir"] == "OUT" and (e["token"] in STABLES or e["contract"] == "native") and is_service(e["cp"])]
+    for e in evs:
+        if e["kind"] in ("サービスから受取", "受取(原資未確認)", "購入(クロスチェーン)"):
+            paid = [p for p in pays if p["cp"] == e["cp"] and 0 <= e["ts"] - p["ts"] <= BUY_MATCH_HOURS * 3600]
+            if paid:
+                e["kind"] = "購入(クロスチェーン)"; e["funding_usd"] = sum(p["usd"] or 0 for p in paid)
+                e["funding_note"] = "、".join(f"{p['time'][5:16]} {p['amount']:.4g} {p['token']}" for p in paid)
+            else:
+                e["kind"] = "受取(原資未確認)"
+
+# ------------------------------------------------------------ 子ウォレット登録
+def register_child(chain, parent, cp, first_seen, queue):
+    wallets[cp] = {"role": child_role(wallets[parent]["role"]), "parent": parent, "first_seen": first_seen, "chains": [chain]}
+    queue.append(cp); log(f"  🆕 監視追加 {wallets[cp]['role']} {cp} (親 {short(parent)}, {chain})")
+
+def try_register(chain, parent, cp, ev, queue):
+    """未知アドレスが EOA なら子として登録。判定不能なら pending に積んで次回再判定"""
+    r = is_contract(chain, cp)
+    if r is False: register_child(chain, parent, cp, ev["time"], queue); return True
+    if r is None and not any(p["addr"] == cp for p in pending_eoa):
+        pending_eoa.append({"chain": chain, "addr": cp, "parent": parent, "first_seen": ev["time"]}); warn(f"EOA判定不能 → 保留 {cp}")
+    return False
+
+# ------------------------------------------------------------ メイン処理
+def run():
+    new_events = []; now_ts = time.time()
+    state["run_count"] = state.get("run_count", 0) + 1
+    # 初回チェーン探索（NodeReal キー無しなら BSC 抜きで探索し、結果は保存しない）
+    active = list(CFG.get("chains") or [])
+    if not active:
+        for ch in CHAINS:
+            if not chain_available(ch): warn(f"{ch}: キー未設定のため探索スキップ"); continue
+            if any(has_activity(ch, a) for a in CFG["main_wallets"]): active.append(ch)
+        log("活動のあるチェーン:", active)
+        if all(chain_available(ch) for ch in CHAINS):
+            CFG["chains"] = active
+            if not DRY_RUN: json.dump(CFG, open(ROOT / "config.json", "w"), indent=2, ensure_ascii=False)
+    active = [ch for ch in active if chain_available(ch)]
+    # 保留中の EOA 判定を再試行
+    queue = list(wallets.keys())
+    for p in list(pending_eoa):
+        if p["addr"] in wallets: pending_eoa.remove(p); continue
+        r = is_contract(p["chain"], p["addr"])
+        if r is False: register_child(p["chain"], p["parent"], p["addr"], p["first_seen"], queue); pending_eoa.remove(p)
+        elif r is True: pending_eoa.remove(p)
+    processed = set()
+    poll = [ch for ch in active if ch in PRIMARY_CHAINS or state["run_count"] % SECONDARY_EVERY == 0]
+    log("今回取得するチェーン:", poll)
+    while queue:
+        w = queue.pop(0)
+        if w in processed: continue
+        processed.add(w)
+        for ch in poll:
+            key = f"{ch}:{w}"
+            rows, new_cur = fetch_rows(ch, w)
+            if rows is None: warn(f"{ch} {short(w)}: 取得失敗（次回に持ち越し）"); continue
+            if rows and ch not in wallets[w]["chains"]: wallets[w]["chains"].append(ch)
+            by_tx = defaultdict(list)
+            for r in rows: by_tx[r["tx"]].append(r)
+            n_new = 0
+            for tx, trs in sorted(by_tx.items(), key=lambda kv: kv[1][0]["ts"]):
+                if f"{ch}:{tx}:{w}" in seen_tx: continue
+                seen_tx.add(f"{ch}:{tx}:{w}"); n_new += 1
+                kind, outs, ins, cp = classify_tx(ch, w, trs)
+                for r in outs + ins:
+                    px = price(ch, r["token"], r["contract"]); usd = r["amount"] * px if px else None
+                    d = "OUT" if r in outs else "IN"
+                    ev = dict(time=datetime.fromtimestamp(r["ts"], timezone.utc).isoformat(), ts=r["ts"], chain=ch, wallet=w, tx=tx,
+                              kind=kind, dir=d, token=r["token"], contract=r["contract"], amount=r["amount"], price=px, usd=usd,
+                              cp=cp, cp_label=label(cp) if cp else "")
+                    if d == "IN" and usd is not None and usd < DUST_USD and not is_watched(cp):
+                        ev["kind"] = "ダスト"
+                    # 新ウォレット検出: 未知EOAへのガス種銭 or 単純トークン送金（スワップは分類段階で除外済み）
+                    if ev["kind"] == "外部へ送金" and cp and d == "OUT" and (now_ts - r["ts"]) < CHILD_MAX_AGE_D * 86400:
+                        seed = r["native"] and (usd or 0) < GAS_SEED_USD
+                        if seed or not r["native"]:
+                            if try_register(ch, w, cp, ev, queue):
+                                ev["kind"] = "新ウォレット開設(ガス種銭)" if seed else "内部移動"; ev["cp_label"] = label(cp)
+                    new_events.append(ev)
+            if new_cur is not None: cursor[key] = new_cur
+            log(f"{ch:9s} {label(w):22s} 行 {len(rows):4d} / 新規tx {n_new}")
+            time.sleep(0.3)
+    events.extend(new_events)
+    resolve_purchases(events)
+    # 残高（HOLDINGS_EVERY 回に1回、または初回・新規ウォレット追加時）
+    prev = jload(DATA / "holdings.json", {"updated": None, "holdings": {}})
+    need = state["run_count"] % HOLDINGS_EVERY == 1 or not prev["holdings"] or any(f"{ch}:{w}" not in prev["holdings"] for w in wallets for ch in active if wallets[w]["chains"] or wallets[w]["role"] == "本体")
+    if need:
+        holdings = {}
+        for w in wallets:
+            for ch in active:
+                if ch not in wallets[w]["chains"] and wallets[w]["role"] != "本体": continue
+                h = fetch_holdings(ch, w)
+                for s, v in h.items():
+                    v["price"] = v["price"] or price(ch, s, v["contract"]); v["usd"] = v["amount"] * v["price"] if v["price"] else None
+                holdings[f"{ch}:{w}"] = h
+                time.sleep(0.3)
+        holdings_doc = {"updated": datetime.now(timezone.utc).isoformat(), "holdings": holdings}
+    else:
+        holdings_doc = prev; holdings = prev["holdings"]
+    # 保存
+    if not DRY_RUN:
+        json.dump(wallets, open(DATA / "wallets.json", "w"), indent=2, ensure_ascii=False)
+        json.dump(sorted(seen_tx), open(DATA / "seen_tx.json", "w"))
+        json.dump(cursor, open(DATA / "cursor.json", "w"), indent=2)
+        json.dump(state, open(DATA / "state.json", "w"), indent=2)
+        json.dump(pending_eoa, open(DATA / "pending_eoa.json", "w"), indent=2)
+        with open(DATA / "events.jsonl", "w") as f:
+            for e in sorted(events, key=lambda e: e["ts"]): f.write(json.dumps(e, ensure_ascii=False) + "\n")
+        json.dump(holdings_doc, open(DATA / "holdings.json", "w"), indent=2, ensure_ascii=False)
+    return new_events, holdings_doc
+
+# ------------------------------------------------------------ 集計（バッチ・比率）
+def batches(evs, gap=1800):
+    out = []
+    sells = sorted([e for e in evs if e["kind"].startswith("売却") and e["dir"] == "OUT"], key=lambda e: e["ts"])
+    groups = defaultdict(list)
+    for e in sells: groups[(e["chain"], e["wallet"], e["token"])].append(e)
+    for (ch, w, tok), g in groups.items():
+        cur = []
+        for e in g:
+            if cur and e["ts"] - cur[-1]["ts"] > gap: out.append(cur); cur = []
+            cur.append(e)
+        if cur: out.append(cur)
+    return [dict(chain=b[0]["chain"], wallet=b[0]["wallet"], token=b[0]["token"], n=len(b), amount=sum(e["amount"] for e in b),
+                 usd=sum(e["usd"] or 0 for e in b), start=b[0]["time"], end=b[-1]["time"]) for b in out]
+
+def main_holding_of(token, holdings):
+    tot = 0.0
+    for k, h in holdings.items():
+        w = k.split(":")[1]
+        if wallets.get(w, {}).get("role") == "本体" and token in h: tot += h[token]["amount"]
+    return tot
+
+# ------------------------------------------------------------ Telegram
+def tg(text):
+    if DRY_RUN: log("[DRY_RUN] Telegram:\n" + text); return
+    if not (TG_TOKEN and TG_CHAT): warn("TG_TOKEN/TG_CHAT 未設定のため通知スキップ"); return
+    for i in range(0, len(text), 3800):
+        r = requests.post(f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage", data={"chat_id": TG_CHAT, "text": text[i:i + 3800], "disable_web_page_preview": True}, timeout=20)
+        if not r.ok: warn("Telegram 送信失敗:", r.status_code, r.text[:200])
+
+def notify(new_events, holdings):
+    cutoff = time.time() - NOTIFY_MAX_AGE_H * 3600
+    notable = []
+    for e in new_events:
+        if e["ts"] < cutoff: continue
+        if e["kind"] == "新ウォレット開設(ガス種銭)": notable.append(e); continue
+        if e["kind"] == "ダスト": continue
+        if (e["usd"] or 0) >= THRESHOLD: notable.append(e)
+    if not notable: log("通知対象なし"); return
+    pages = CFG.get("pages_url", "")
+    lines = ["🐋 クジラ動きました"]
+    for e in [e for e in notable if e["kind"] == "内部移動" and e["dir"] == "OUT"]:
+        base = main_holding_of(e["token"], holdings) + (e["amount"] if wallets[e["wallet"]]["role"] == "本体" else 0)
+        pct = f"（本体保有の{e['amount'] / base * 100:.1f}%）" if base else ""
+        lines.append(f"↪ {e['time'][5:16]} {label(e['wallet'])} → {e['cp_label']}: {e['token']} {e['amount']:,.0f} ≈ ${(e['usd'] or 0):,.0f}{pct}")
+    for b in batches(notable):
+        base = main_holding_of(b["token"], holdings)
+        pct = f" 本体保有比{b['amount'] / (base + b['amount']) * 100:.1f}%" if base else ""
+        lines.append(f"🔻 売却 {b['start'][5:16]}–{b['end'][11:16]} {label(b['wallet'])} {b['token']} {b['amount']:,.0f} ≈ ${b['usd']:,.0f} ({b['n']}回){pct}")
+    for e in notable:
+        if e["kind"] in ("購入(スワップ)", "購入(クロスチェーン)", "受取(原資未確認)"):
+            fund = f"（原資 ${e['funding_usd']:,.0f}）" if e.get("funding_usd") else ""
+            lines.append(f"🟢 {e['kind']} {e['time'][5:16]} {label(e['wallet'])} {e['token']} {e['amount']:,.0f} ≈ ${(e['usd'] or 0):,.0f} ← {e['cp_label']}{fund}")
+        elif e["kind"] == "新ウォレット開設(ガス種銭)":
+            lines.append(f"🆕 新ウォレット {e['cp_label']} に種銭 {e['amount']:.4f} {e['token']}（{label(e['wallet'])}から）→ 監視に追加")
+        elif e["kind"] == "内部移動" and e["dir"] == "IN" and e["contract"] == "native":
+            lines.append(f"💰 代金戻り {e['time'][5:16]} {label(e['wallet'])} ← {e['cp_label']}: {e['amount']:,.2f} {e['token']} ≈ ${(e['usd'] or 0):,.0f}")
+        elif e["kind"] in ("サービスへ送金", "外部へ送金"):
+            lines.append(f"📤 {e['kind']} {e['time'][5:16]} {label(e['wallet'])} → {e['cp_label']}: {e['amount']:,.4g} {e['token']} ≈ ${(e['usd'] or 0):,.0f}")
+    if pages and "<" not in pages: lines.append(f"詳細: {pages}")
+    tg("\n".join(lines))
+
+# ------------------------------------------------------------ HTML
+def html(holdings_doc):
+    from html_report import render
+    hd = holdings_doc["holdings"] if isinstance(holdings_doc, dict) and "holdings" in holdings_doc else holdings_doc
+    upd = holdings_doc.get("updated") if isinstance(holdings_doc, dict) else None
+    out = DOCS / ("index.dryrun.html" if DRY_RUN else "index.html")
+    render(CFG, CHAINS, wallets, events, hd, batches(events), THRESHOLD, label, out, holdings_updated=upd)
+    log("HTML 生成:", out)
+
+if __name__ == "__main__":
+    if not NODEREAL_KEY: warn("NODEREAL_KEY 未設定（BSC は取得できません）")
+    if not BLOCKSCOUT_KEY: warn("BLOCKSCOUT_KEY 未設定（公開インスタンスの API を使うため 429 が出やすくなります）")
+    if DRY_RUN: log("DRY_RUN: 通知・保存なし")
+    new_events, holdings_doc = run()
+    log(f"新イベント {len(new_events)} 件 / 監視ウォレット {len(wallets)} / 保留EOA {len(pending_eoa)}")
+    if DRY_RUN:
+        for e in sorted(new_events, key=lambda e: e["ts"])[-40:]:
+            log(f"  {e['time'][:16]} {e['chain']:9s} {label(e['wallet']):14s} {e['kind']:14s} {e['dir']} {e['token']:12s} {e['amount']:>14.6g} {('$%.0f' % e['usd']) if e['usd'] is not None else '$?':>9s} ← {e['cp_label'][:40]}")
+    notify(new_events, holdings_doc["holdings"])
+    html(holdings_doc)
