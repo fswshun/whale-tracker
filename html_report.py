@@ -21,7 +21,7 @@ tr.sell td:first-child{box-shadow:inset 3px 0 0 var(--sell)}tr.move td:first-chi
 details summary{cursor:pointer;color:var(--ink2);font-size:13px;padding:6px 0}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}@media(max-width:1100px){.grid2{grid-template-columns:1fr}}
 """
 
-KIND_CLASS = {"売却": "sell", "内部移動": "move", "購入": "buy", "新ウォレット": "buy", "受取(原資未確認)": "warn", "サービスへ送金": "move"}
+KIND_CLASS = {"売却": "sell", "内部移動": "move", "購入": "buy", "新ウォレット": "buy", "受取(原資未確認)": "warn", "サービスへ送金": "move", "なりすまし": "recv", "バーン": "recv"}
 
 def kcls(kind):
     for k, c in KIND_CLASS.items():
@@ -82,13 +82,13 @@ def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label,
                      f"<td><span class='k {kcls(e['kind'])}'>{esc(e['kind'])}</span>{extra}</td><td>{e['dir']}</td><td>{esc(e['token'])}</td>"
                      f"<td class='r'>{num(e['amount'])}</td><td class='r'>{usd(e.get('usd'))}</td><td>{esc(e.get('cp_label') or '')}</td></tr>")
     # --- 小口 ---
-    minor = [e for e in evs if e not in major and e["kind"] != "ダスト" and not e["kind"].startswith("売却")][:300]
+    minor = [e for e in evs if e not in major and e["kind"] not in ("ダスト", "なりすまし(偽送金)") and not e["kind"].startswith("売却")][:300]
     g = defaultdict(lambda: {"n": 0, "amt": 0.0, "usd": 0.0, "last": ""})
     for e in minor:
         k = (e["wallet"], e["kind"], e["token"], e["dir"], e["chain"]); g[k]["n"] += 1; g[k]["amt"] += e["amount"]; g[k]["usd"] += e.get("usd") or 0; g[k]["last"] = max(g[k]["last"], e["time"])
     mrows = "".join(f"<li><span><span class='k {kcls(k[1])}'>{esc(k[1])}</span> {esc(k[2])} {num(v['amt'])}枚 ×{v['n']}{(' ' + usd(v['usd'])) if v['usd'] else ''}</span><span class='sub'>{v['last'][5:16]} {esc(label(k[0]))} {chains[k[4]]['name']}</span></li>"
                     for k, v in sorted(g.items(), key=lambda kv: kv[1]["last"], reverse=True)[:60])
-    dust_n = sum(1 for e in evs if e["kind"] == "ダスト")
+    dust_n = sum(1 for e in evs if e["kind"] in ("ダスト", "なりすまし(偽送金)"))
     # --- ラベル ---
     lab_rows = "".join(f"<span title='{a}'>{a[:6]}…{a[-4:]}</span><span class='sub' style='white-space:normal'>{esc(l)}</span>" for a, l in cfg.get("labels", {}).items())
     chain_chips = "".join(f"<span class='chip'>{chains[c]['name']}</span>" for c in cfg.get("chains", []))

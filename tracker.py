@@ -66,6 +66,10 @@ KNOWN_STABLES = {
     ("robinhood", "0x5fc5360d0400a0fd4f2af552add042d716f1d168"),
 }
 MIN_LIQ_USD = 5000     # DexScreener の流動性がこれ未満のペアの価格は使わない（偽トークン・ゴミ価格対策）
+RUN_BUDGET_S = float(CFG.get("run_budget_minutes", 18)) * 60   # これを超えたら残りは次回に回して保存だけ行う（Actions timeout 対策）
+PRICE_CACHE_H = 24     # DexScreener が落ちている時に使う前回価格の有効時間
+T0 = time.time()
+def over_budget(): return time.time() - T0 > RUN_BUDGET_S
 THRESHOLD = float(CFG.get("threshold_usd", 10000))
 GAS_SEED_USD = float(CFG.get("gas_seed_usd", 20))        # これ未満のネイティブ送金を未知EOAへ → 新ウォレット開設シグナル
 BUY_MATCH_HOURS = int(CFG.get("buy_match_hours", 168))    # 受取前この時間内（7日）に同じ相手へ原資を払っていれば「購入」
@@ -111,6 +115,13 @@ def label(a):
     if SERVICE_PREFIX.match(a): return f"0x00AA系サービス {short(a)}"
     return short(a)
 def child_role(parent_role): return {"本体": "子", "子": "孫", "孫": "曾孫"}.get(parent_role, "子孫")
+BURN = {"0x0000000000000000000000000000000000000000", "0x000000000000000000000000000000000000dead", "0x0000000000000000000000000000000000000001",
+        "0x00000000000000000000000000000000deadbeef", "0xdead000000000000000042069420694206942069"}
+def is_burn(a): return (a or "").lower() in BURN
+def is_lookalike(a):
+    """監視ウォレットと先頭6桁・末尾3桁が同じ別アドレス＝アドレスポイズニングの偽物"""
+    a = (a or "").lower()
+    return any(w != a and w[:6] == a[:6] and w[-3:] == a[-3:] for w in wallets)
 
 # ------------------------------------------------------------ HTTP 共通
 def http_json(method, url, retries=3, timeout=30, **kw):
@@ -122,7 +133,7 @@ def http_json(method, url, retries=3, timeout=30, **kw):
             if r.status_code == 429:
                 last = f"HTTP 429 {r.text[:80]!r}"; time.sleep(6 * (i + 1)); continue
             if r.status_code in (500, 502, 503, 504) or r.headers.get("cf-mitigated") == "challenge":
-                last = f"HTTP {r.status_code} {r.text[:80]!r}"; time.sleep(3 * (i + 1)); continue
+                last = f"HTTP {r.status_code} {r.text[:80]!r}"; time.sleep(2 * (i + 1)); continue
             if not r.ok: last = f"HTTP {r.status_code} {r.text[:120]!r}"; time.sleep(1 + i); continue
             return r.json()
         except Exception as e:
@@ -211,6 +222,8 @@ def bs_rows(chain, addr, since_block):
             rows.append(dict(chain=chain, tx=t.get("hash") or t.get("transactionHash"), block=int(t["blockNumber"]), ts=int(t["timeStamp"]),
                              frm=t["from"].lower(), to=(t.get("to") or "").lower(), token=CHAINS[chain]["native"],
                              contract="native", amount=v / 1e18, native=True, internal=True))
+    senders = {t["hash"]: t["from"].lower() for t in txs}
+    for r in rows: r["tx_from"] = senders.get(r["tx"])
     return rows
 
 def bs_is_contract(chain, addr):
@@ -321,10 +334,12 @@ def nr_rows(chain, addr, from_block, to_block):
             if amount > 0: rows.append(dict(base, token=CHAINS[chain]["native"], contract="native", native=True, internal=True))
         else:
             if amount > 0: rows.append(dict(base, token=CHAINS[chain]["native"], contract="native", native=True))
-    # 各 tx の input を見て「コントラクト呼出か」を補う（新規 tx は少数なので都度取得）
+    # 各 tx の送信者と input を見て「本人発か」「コントラクト呼出か」を補う（新規 tx は少数なので都度取得）
     for tx in {r["tx"] for r in rows if r["tx"]}:
         t = nr_rpc(chain, "eth_getTransactionByHash", [tx])
         if not isinstance(t, dict): continue
+        for r in rows:
+            if r["tx"] == tx: r["tx_from"] = (t.get("from") or "").lower()
         inp = t.get("input") or "0x"
         if (t.get("from") or "").lower() == addr.lower() and inp not in ("0x", ""):
             blk = hx(t.get("blockNumber")) or 0; ts = next((r["ts"] for r in rows if r["tx"] == tx), 0)
@@ -406,7 +421,39 @@ def fetch_holdings(chain, addr): return bs_holdings(chain, addr) if provider(cha
 def has_activity(chain, addr): return bs_has_activity(chain, addr) if provider(chain) == "blockscout" else nr_has_activity(chain, addr)
 
 # ------------------------------------------------------------ 価格
-_px = {}
+_px = {}                                                   # (chain, contract) -> price or None（この実行内のキャッシュ）
+price_cache = jload(DATA / "prices.json", {})              # "chain:contract" -> {"px": .., "ts": ..}（前回価格。API 不調時の保険）
+
+def _pair_price(p):
+    liq = float((p.get("liquidity") or {}).get("usd") or 0)
+    return (liq, float(p["priceUsd"])) if liq >= MIN_LIQ_USD and p.get("priceUsd") else (liq, None)
+
+def _set_px(chain, contract, px, fetched=True):
+    key = (chain, contract)
+    if px is None and fetched is False:                  # 取得失敗 → 前回価格で代用
+        old = price_cache.get(f"{chain}:{contract}")
+        if old and old.get("px") and time.time() - old.get("ts", 0) < PRICE_CACHE_H * 3600: px = old["px"]
+    _px[key] = px
+    if px is not None and fetched: price_cache[f"{chain}:{contract}"] = {"px": px, "ts": int(time.time())}
+
+def prefetch_prices(chain, contracts):
+    """DexScreener の tokens/v1 は 30 アドレスまで一括可。呼び出し回数を減らすため先にまとめて取る"""
+    need = sorted({(c or "").lower() for c in contracts if c and c != "native" and (chain, (c or "").lower()) not in _px})
+    for i in range(0, len(need), 30):
+        chunk = need[i:i + 30]; cs = set(chunk)
+        j = http_json("GET", f"https://api.dexscreener.com/tokens/v1/{CHAINS[chain]['dex']}/{','.join(chunk)}", retries=3)
+        if not isinstance(j, list):
+            for c in chunk: _set_px(chain, c, None, fetched=False)
+            continue
+        best = {}
+        for p in j:
+            addr = ((p.get("baseToken") or {}).get("address") or "").lower()
+            if addr in cs:
+                liq, px = _pair_price(p)
+                if addr not in best or liq > best[addr][0]: best[addr] = (liq, px)
+        for c in chunk: _set_px(chain, c, best.get(c, (0, None))[1])
+        time.sleep(0.3)
+
 def price(chain, symbol, contract):
     mp = CFG.get("manual_prices", {})
     if symbol in mp: return float(mp[symbol])
@@ -417,22 +464,27 @@ def price(chain, symbol, contract):
         elif c.get("native_ref"): chain, contract = c["native_ref"]
         else: return None
     if not contract: return None
-    key = (chain, contract.lower())
+    contract = contract.lower(); key = (chain, contract)
     if key in _px: return _px[key]
-    px = None
     j = http_json("GET", f"https://api.dexscreener.com/tokens/v1/{CHAINS[chain]['dex']}/{contract}", retries=2)
-    if isinstance(j, list) and j:
-        try:
-            best = max(j, key=lambda p: float((p.get("liquidity") or {}).get("usd") or 0))
-            px = float(best["priceUsd"]) if float((best.get("liquidity") or {}).get("usd") or 0) >= MIN_LIQ_USD else None
-        except Exception: px = None
-    _px[key] = px
+    if not isinstance(j, list): _set_px(chain, contract, None, fetched=False); return _px[key]
+    px = None
+    try:
+        if j: px = _pair_price(max(j, key=lambda p: float((p.get("liquidity") or {}).get("usd") or 0)))[1]
+    except Exception: px = None
+    _set_px(chain, contract, px)
     return px
 
 # ------------------------------------------------------------ 分類
 def classify_tx(chain, owner, trs):
     outs = [r for r in trs if r["frm"] == owner and r["amount"] > 0]
     ins = [r for r in trs if r["to"] == owner and r["amount"] > 0]
+    # 本人が署名していない tx でトークンだけが「出ていく」＝スキャムトークンの偽 Transfer（アドレスポイズニング）
+    if outs and not ins and all(not r["native"] and r.get("tx_from") != owner for r in outs):
+        cp = next((r["to"] for r in outs), "")
+        return "なりすまし(偽送金)", [], [], cp
+    if outs and all(is_burn(r["to"]) for r in outs) and not ins:
+        return "バーン", outs, [], outs[0]["to"]
     tok_out = [r for r in outs if not r["native"]]; tok_in = [r for r in ins if not r["native"]]
     nat_out = [r for r in outs if r["native"]]; nat_in = [r for r in ins if r["native"]]
     token_contracts = {r["contract"] for r in tok_out + tok_in}
@@ -514,9 +566,11 @@ def run():
         processed.add(w)
         for ch in poll:
             key = f"{ch}:{w}"
+            if over_budget(): warn(f"時間予算 {RUN_BUDGET_S/60:.0f} 分超過 → {ch} {short(w)} 以降は次回に持ち越し"); continue
             rows, new_cur = fetch_rows(ch, w)
             if rows is None: warn(f"{ch} {short(w)}: 取得失敗（次回に持ち越し）"); continue
             if rows and ch not in wallets[w]["chains"]: wallets[w]["chains"].append(ch)
+            prefetch_prices(ch, [r["contract"] for r in rows if not r["native"]] + ([CHAINS[ch]["wnative"]] if CHAINS[ch].get("wnative") else []))
             by_tx = defaultdict(list)
             for r in rows: by_tx[r["tx"]].append(r)
             n_new = 0
@@ -534,8 +588,9 @@ def run():
                         ev["kind"] = "ダスト"
                     if d == "IN" and not r["native"] and not is_watched(cp) and not is_service(cp) and (not r["token"].isascii() or usd is None and r["token"].upper() in ("BNB", "ETH", "WBNB", "WETH", "USDT", "USDC")):
                         ev["kind"] = "ダスト"     # 偽ネイティブ/偽ステーブルのばら撒き（アドレスポイズニング）
+                    if d == "IN" and is_lookalike(cp): ev["kind"] = "ダスト"; ev["cp_label"] = f"なりすまし {short(cp)}"
                     # 新ウォレット検出: 未知EOAへのガス種銭 or 単純トークン送金（スワップは分類段階で除外済み）
-                    if ev["kind"] == "外部へ送金" and cp and d == "OUT" and (now_ts - r["ts"]) < CHILD_MAX_AGE_D * 86400:
+                    if ev["kind"] == "外部へ送金" and cp and d == "OUT" and (now_ts - r["ts"]) < CHILD_MAX_AGE_D * 86400 and not is_burn(cp) and not is_lookalike(cp):
                         seed = r["native"] and (usd or 0) < GAS_SEED_USD
                         if seed or not r["native"]:
                             if try_register(ch, w, cp, ev, queue):
@@ -549,12 +604,14 @@ def run():
     # 残高（HOLDINGS_EVERY 回に1回、または初回・新規ウォレット追加時）
     prev = jload(DATA / "holdings.json", {"updated": None, "holdings": {}})
     need = state["run_count"] % HOLDINGS_EVERY == 1 or not prev["holdings"] or any(f"{ch}:{w}" not in prev["holdings"] for w in wallets for ch in active if wallets[w]["chains"] or wallets[w]["role"] == "本体")
+    if need and over_budget(): warn("時間予算超過 → 残高更新は次回"); need = False
     if need:
         holdings = {}
         for w in wallets:
             for ch in active:
                 if ch not in wallets[w]["chains"] and wallets[w]["role"] != "本体": continue
                 h = fetch_holdings(ch, w)
+                prefetch_prices(ch, [v["contract"] for v in h.values() if not v.get("price")])
                 for s, v in h.items():
                     v["price"] = v["price"] or price(ch, s, v["contract"]); v["usd"] = v["amount"] * v["price"] if v["price"] else None
                 holdings[f"{ch}:{w}"] = h
@@ -572,6 +629,7 @@ def run():
         with open(DATA / "events.jsonl", "w") as f:
             for e in sorted(events, key=lambda e: e["ts"]): f.write(json.dumps(e, ensure_ascii=False) + "\n")
         json.dump(holdings_doc, open(DATA / "holdings.json", "w"), indent=2, ensure_ascii=False)
+        json.dump(price_cache, open(DATA / "prices.json", "w"))
     return new_events, holdings_doc
 
 # ------------------------------------------------------------ 集計（バッチ・比率）
@@ -652,7 +710,7 @@ if __name__ == "__main__":
     if not BLOCKSCOUT_KEY: warn("BLOCKSCOUT_KEY 未設定（公開インスタンスの API を使うため 429 が出やすくなります）")
     if DRY_RUN: log("DRY_RUN: 通知・保存なし")
     new_events, holdings_doc = run()
-    log(f"新イベント {len(new_events)} 件 / 監視ウォレット {len(wallets)} / 保留EOA {len(pending_eoa)}")
+    log(f"新イベント {len(new_events)} 件 / 監視ウォレット {len(wallets)} / 保留EOA {len(pending_eoa)} / 所要 {(time.time()-T0)/60:.1f} 分")
     if DRY_RUN:
         for e in sorted(new_events, key=lambda e: e["ts"])[-40:]:
             log(f"  {e['time'][:16]} {e['chain']:9s} {label(e['wallet']):14s} {e['kind']:14s} {e['dir']} {e['token']:12s} {e['amount']:>14.6g} {('$%.0f' % e['usd']) if e['usd'] is not None else '$?':>9s} ← {e['cp_label'][:40]}")
