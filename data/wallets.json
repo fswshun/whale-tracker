@@ -3,13 +3,34 @@
     "role": "本体",
     "parent": null,
     "first_seen": null,
-    "chains": []
+    "chains": [
+      "robinhood",
+      "bsc"
+    ]
   },
   "0xa9734d098d90c45bfc768ecdd5974e9460bbd4fb": {
     "role": "子",
     "parent": "0xde52c75041371b5e08d8a50b82c63734850628c1",
     "first_seen": "2026-09-05T16:30:09+00:00",
     "chains": [
+      "bsc",
+      "robinhood"
+    ]
+  },
+  "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
+    "role": "子",
+    "parent": "0xde52c75041371b5e08d8a50b82c63734850628c1",
+    "first_seen": "2026-09-02T11:42:14+00:00",
+    "chains": [
+      "robinhood"
+    ]
+  },
+  "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
+    "role": "孫",
+    "parent": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
+    "first_seen": "2026-09-01T11:09:57+00:00",
+    "chains": [
+      "robinhood",
       "bsc"
     ]
   }
