@@ -38,7 +38,7 @@ def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label,
     for key, h in holdings.items():
         ch, w = key.split(":")
         for s, v in h.items():
-            by_wallet[w].append({"sym": s, "chain": ch, **v})
+            by_wallet[w].append({"sym": v.get("symbol") or s, "chain": ch, **v})
     main_tot = 0.0
     left = []
     order = sorted(wallets, key=lambda w: ({"本体": 0, "子": 1, "孫": 2}.get(wallets[w]["role"], 3), w))
@@ -64,12 +64,12 @@ def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label,
                     f"<div class='total'>{usd(tot)}</div>{parent}<div class='hold'>{rows}</div>{small_html}</div>")
 
     # --- 売却バッチ ---
-    def main_holding(token):
-        return sum(x["amount"] for w in wallets if wallets[w]["role"] == "本体" for x in by_wallet.get(w, []) if x["sym"] == token)
+    def main_holding(contract):
+        return sum(x["amount"] for w in wallets if wallets[w]["role"] == "本体" for x in by_wallet.get(w, []) if x.get("contract") == contract)
     brows = []
     for b in sorted(batch_list, key=lambda b: b["start"], reverse=True)[:60]:
         if b["usd"] < threshold: continue
-        base = main_holding(b["token"]); pct = f"{b['amount'] / (base + b['amount']) * 100:.1f}%" if base else "—"
+        base = main_holding(b.get("contract") or b["token"]); pct = f"{b['amount'] / (base + b['amount']) * 100:.1f}%" if base else "—"
         brows.append(f"<tr class='sell'><td>{b['start'][5:16]} – {b['end'][11:16]}</td><td>{esc(label(b['wallet']))}</td><td>{esc(b['token'])}<span class='tag'>{chains[b['chain']]['name']}</span></td>"
                      f"<td class='r'>{b['n']}</td><td class='r'>{num(b['amount'])}</td><td class='r'>{usd(b['usd'])}</td><td class='r'>{pct}</td></tr>")
     # --- 主要イベント ---

@@ -232,35 +232,42 @@ def bs_is_contract(chain, addr):
     return None
 
 def bs_holdings(chain, addr):
+    """{contract: {symbol, amount, contract, price}}。ネイティブは key "native"。
+    ※ キーはシンボルでなくコントラクト（同名の偽トークンに本物が上書きされるのを防ぐ）"""
     h = {}
     j = bs_v2(chain, f"/addresses/{addr}")
     if isinstance(j, dict) and j.get("coin_balance") is not None:
-        h[CHAINS[chain]["native"]] = {"amount": int(j["coin_balance"]) / 1e18, "contract": "native",
-                                      "price": float(j["exchange_rate"]) if j.get("exchange_rate") else None}
+        h["native"] = {"symbol": CHAINS[chain]["native"], "amount": int(j["coin_balance"]) / 1e18, "contract": "native",
+                       "price": float(j["exchange_rate"]) if j.get("exchange_rate") else None}
     else:
         bal = bs_compat(chain, {"module": "account", "action": "balance", "address": addr, "tag": "latest"})
         if isinstance(bal, str) and bal.isdigit():
-            h[CHAINS[chain]["native"]] = {"amount": int(bal) / 1e18, "contract": "native", "price": None}
-    params, ok = {"type": "ERC-20"}, True
-    for _ in range(10):
+            h["native"] = {"symbol": CHAINS[chain]["native"], "amount": int(bal) / 1e18, "contract": "native", "price": None}
+    params, pages = {"type": "ERC-20"}, 0
+    for _ in range(12):
         j = bs_v2(chain, f"/addresses/{addr}/tokens", params)
-        if not isinstance(j, dict) or "items" not in j: ok = False; break
+        if not isinstance(j, dict) or "items" not in j:
+            time.sleep(3); j = bs_v2(chain, f"/addresses/{addr}/tokens", params)      # 1回だけ再試行
+            if not isinstance(j, dict) or "items" not in j: break
+        pages += 1
         for it in j["items"]:
             tk = it["token"]; dec = int(tk.get("decimals") or 18)
-            amt = int(it["value"]) / 10 ** dec
-            if amt > 0:
-                h[tk.get("symbol") or "?"] = {"amount": amt, "contract": (tk.get("address") or tk.get("address_hash") or "").lower(),
-                                              "price": float(tk["exchange_rate"]) if tk.get("exchange_rate") else None}
+            amt = int(it["value"]) / 10 ** dec; c = (tk.get("address") or tk.get("address_hash") or "").lower()
+            if amt > 0 and c:
+                h[c] = {"symbol": tk.get("symbol") or "?", "amount": amt, "contract": c,
+                        "price": float(tk["exchange_rate"]) if tk.get("exchange_rate") else None}
         if not j.get("next_page_params"): break
         params = {"type": "ERC-20", **j["next_page_params"]}
-    if not ok:   # v2 が落ちている時は tokentx 全履歴の差引で代用
+    else:
+        warn(f"{chain} {short(addr)}: トークンが12ページ超、以降は切り捨て")
+    if pages == 0:   # v2 が落ちている時は tokentx 全履歴の差引で代用
         warn(f"{chain} v2 tokens 取得不可 → tokentx 差引で代用 {short(addr)}")
         net = defaultdict(float); meta = {}
         for t in bs_compat_all(chain, {"module": "account", "action": "tokentx", "address": addr, "startblock": 0, "endblock": 99999999, "sort": "asc"}) or []:
             dec = int(t.get("tokenDecimal") or 18); k = t["contractAddress"].lower(); v = int(t["value"]) / 10 ** dec
             net[k] += v if t["to"].lower() == addr.lower() else -v; meta[k] = t.get("tokenSymbol") or "?"
         for k, v in net.items():
-            if v > 1e-9: h[meta[k]] = {"amount": v, "contract": k, "price": None}
+            if v > 1e-9: h[k] = {"symbol": meta[k], "amount": v, "contract": k, "price": None}
     return h
 
 def bs_has_activity(chain, addr):
@@ -364,7 +371,7 @@ def nr_is_contract(chain, addr):
 def nr_holdings(chain, addr):
     h = {}
     bal = nr_rpc(chain, "eth_getBalance", [addr, "latest"])
-    if bal is not None: h[CHAINS[chain]["native"]] = {"amount": hx(bal) / 1e18, "contract": "native", "price": None}
+    if bal is not None: h["native"] = {"symbol": CHAINS[chain]["native"], "amount": hx(bal) / 1e18, "contract": "native", "price": None}
     page = 1
     while page <= 10:
         res = nr_rpc(chain, "nr_getTokenHoldings", [addr, hex(page), "0x64"])
@@ -373,7 +380,8 @@ def nr_holdings(chain, addr):
         for d in det:
             dec = hx(d.get("tokenDecimals")) if d.get("tokenDecimals") is not None else 18
             amt = (hx(d.get("tokenBalance")) or 0) / 10 ** dec
-            if amt > 0: h[d.get("tokenSymbol") or "?"] = {"amount": amt, "contract": (d.get("tokenAddress") or "").lower(), "price": None}
+            c = (d.get("tokenAddress") or "").lower()
+            if amt > 0 and c: h[c] = {"symbol": d.get("tokenSymbol") or "?", "amount": amt, "contract": c, "price": None}
         if len(det) < 100 or page * 100 >= (hx(res.get("totalCount")) or 0): break
         page += 1
     return h
@@ -603,7 +611,7 @@ def run():
     resolve_purchases(events)
     # 残高（HOLDINGS_EVERY 回に1回、または初回・新規ウォレット追加時）
     prev = jload(DATA / "holdings.json", {"updated": None, "holdings": {}})
-    need = state["run_count"] % HOLDINGS_EVERY == 1 or not prev["holdings"] or any(f"{ch}:{w}" not in prev["holdings"] for w in wallets for ch in active if wallets[w]["chains"] or wallets[w]["role"] == "本体")
+    need = state["run_count"] % HOLDINGS_EVERY == 1 or not prev["holdings"] or prev.get("version") != 2 or any(f"{ch}:{w}" not in prev["holdings"] for w in wallets for ch in active if wallets[w]["chains"] or wallets[w]["role"] == "本体")
     if need and over_budget(): warn("時間予算超過 → 残高更新は次回"); need = False
     if need:
         holdings = {}
@@ -613,10 +621,10 @@ def run():
                 h = fetch_holdings(ch, w)
                 prefetch_prices(ch, [v["contract"] for v in h.values() if not v.get("price")])
                 for s, v in h.items():
-                    v["price"] = v["price"] or price(ch, s, v["contract"]); v["usd"] = v["amount"] * v["price"] if v["price"] else None
+                    v["price"] = v["price"] or price(ch, v["symbol"], v["contract"]); v["usd"] = v["amount"] * v["price"] if v["price"] else None
                 holdings[f"{ch}:{w}"] = h
                 time.sleep(0.3)
-        holdings_doc = {"updated": datetime.now(timezone.utc).isoformat(), "holdings": holdings}
+        holdings_doc = {"version": 2, "updated": datetime.now(timezone.utc).isoformat(), "holdings": holdings}
     else:
         holdings_doc = prev; holdings = prev["holdings"]
     # 保存
@@ -637,21 +645,22 @@ def batches(evs, gap=1800):
     out = []
     sells = sorted([e for e in evs if e["kind"].startswith("売却") and e["dir"] == "OUT"], key=lambda e: e["ts"])
     groups = defaultdict(list)
-    for e in sells: groups[(e["chain"], e["wallet"], e["token"])].append(e)
-    for (ch, w, tok), g in groups.items():
+    for e in sells: groups[(e["chain"], e["wallet"], e["contract"])].append(e)
+    for (ch, w, c), g in groups.items():
         cur = []
         for e in g:
             if cur and e["ts"] - cur[-1]["ts"] > gap: out.append(cur); cur = []
             cur.append(e)
         if cur: out.append(cur)
-    return [dict(chain=b[0]["chain"], wallet=b[0]["wallet"], token=b[0]["token"], n=len(b), amount=sum(e["amount"] for e in b),
+    return [dict(chain=b[0]["chain"], wallet=b[0]["wallet"], token=b[0]["token"], contract=b[0]["contract"], n=len(b), amount=sum(e["amount"] for e in b),
                  usd=sum(e["usd"] or 0 for e in b), start=b[0]["time"], end=b[-1]["time"]) for b in out]
 
-def main_holding_of(token, holdings):
+def main_holding_of(contract, holdings):
+    """本体ウォレットの当該コントラクト（native 含む）の保有枚数（全チェーン合算）"""
     tot = 0.0
     for k, h in holdings.items():
         w = k.split(":")[1]
-        if wallets.get(w, {}).get("role") == "本体" and token in h: tot += h[token]["amount"]
+        if wallets.get(w, {}).get("role") == "本体" and contract in h: tot += h[contract]["amount"]
     return tot
 
 # ------------------------------------------------------------ Telegram
@@ -675,12 +684,12 @@ def notify(new_events, holdings):
     lines = ["🐋 クジラ動きました"]
     shown_tx = set()
     for e in [e for e in notable if e["kind"] == "内部移動" and e["dir"] == "OUT"]:
-        base = main_holding_of(e["token"], holdings) + (e["amount"] if wallets[e["wallet"]]["role"] == "本体" else 0)
+        base = main_holding_of(e["contract"], holdings) + (e["amount"] if wallets[e["wallet"]]["role"] == "本体" else 0)
         pct = f"（本体保有の{e['amount'] / base * 100:.1f}%）" if base else ""
         lines.append(f"↪ {e['time'][5:16]} {label(e['wallet'])} → {e['cp_label']}: {e['token']} {e['amount']:,.4g} ≈ ${(e['usd'] or 0):,.0f}{pct}")
         shown_tx.add(e["tx"])
     for b in batches(notable):
-        base = main_holding_of(b["token"], holdings)
+        base = main_holding_of(b["contract"], holdings)
         pct = f" 本体保有比{b['amount'] / (base + b['amount']) * 100:.1f}%" if base else ""
         lines.append(f"🔻 売却 {b['start'][5:16]}–{b['end'][11:16]} {label(b['wallet'])} {b['token']} {b['amount']:,.0f} ≈ ${b['usd']:,.0f} ({b['n']}回){pct}")
     for e in notable:
