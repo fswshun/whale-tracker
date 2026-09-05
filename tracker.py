@@ -41,15 +41,15 @@ DRY_RUN = os.getenv("DRY_RUN", "") not in ("", "0")
 
 WETH_ETH = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
 CHAINS = {
-    "robinhood": {"name": "Robinhood Chain", "provider": "blockscout", "base": "https://robinhoodchain.blockscout.com", "chain_id": 4663,
+    "robinhood": {"name": "Robinhood Chain", "provider": "blockscout", "base": "https://robinhoodchain.blockscout.com", "chain_id": 4663, "rpcs": [],
                   "native": "ETH", "dex": "robinhood", "wnative": "", "native_ref": ("ethereum", WETH_ETH)},
     "bsc":       {"name": "BSC", "provider": "nodereal", "rpc": "https://bsc-mainnet.nodereal.io/v1/{key}",
                   "native": "BNB", "dex": "bsc", "wnative": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"},
-    "ethereum":  {"name": "Ethereum", "provider": "blockscout", "base": "https://eth.blockscout.com", "chain_id": 1,
+    "ethereum":  {"name": "Ethereum", "provider": "blockscout", "base": "https://eth.blockscout.com", "chain_id": 1, "rpcs": ["https://eth.llamarpc.com", "https://cloudflare-eth.com"],
                   "native": "ETH", "dex": "ethereum", "wnative": WETH_ETH},
-    "base":      {"name": "Base", "provider": "blockscout", "base": "https://base.blockscout.com", "chain_id": 8453,
+    "base":      {"name": "Base", "provider": "blockscout", "base": "https://base.blockscout.com", "chain_id": 8453, "rpcs": ["https://mainnet.base.org", "https://base.llamarpc.com"],
                   "native": "ETH", "dex": "base", "wnative": "0x4200000000000000000000000000000000000006"},
-    "arbitrum":  {"name": "Arbitrum", "provider": "blockscout", "base": "https://arbitrum.blockscout.com", "chain_id": 42161,
+    "arbitrum":  {"name": "Arbitrum", "provider": "blockscout", "base": "https://arbitrum.blockscout.com", "chain_id": 42161, "rpcs": ["https://arb1.arbitrum.io/rpc"],
                   "native": "ETH", "dex": "arbitrum", "wnative": "0x82af49447d8a07e3bd95bd0d56f35241523fbbe2"},
 }
 STABLES = {"USDC", "USDT", "USDG", "USD1", "DAI", "FDUSD", "BUSD"}
@@ -269,7 +269,39 @@ def bs_holdings(chain, addr):
             net[k] += v if t["to"].lower() == addr.lower() else -v; meta[k] = t.get("tokenSymbol") or "?"
         for k, v in net.items():
             if v > 1e-9: h[k] = {"symbol": meta[k], "amount": v, "contract": k, "price": None}
+    else:
+        try: bs_reconcile_holdings(chain, addr, h)
+        except Exception as e: warn(f"{chain} {short(addr)} 残高補完でエラー: {e!r}")
     return h
+
+def rpc_balance_of(chain, contract, addr):
+    """ERC-20 balanceOf をチェーンに直接問い合わせる（Blockscout PRO の json-rpc → 公開 RPC の順）。失敗は None"""
+    data = "0x70a08231" + addr[2:].rjust(64, "0")
+    urls = ([f"{BLOCKSCOUT_PRO}/{CHAINS[chain]['chain_id']}/json-rpc?apikey={BLOCKSCOUT_KEY}"] if BLOCKSCOUT_KEY else []) + CHAINS[chain].get("rpcs", [])
+    for url in urls:
+        j = http_json("POST", url, retries=1, json={"jsonrpc": "2.0", "id": 1, "method": "eth_call", "params": [{"to": contract, "data": data}, "latest"]})
+        res = j.get("result") if isinstance(j, dict) else None
+        if isinstance(res, str) and res.startswith("0x") and len(res) > 2:
+            try: return int(res, 16)
+            except ValueError: pass
+    return None
+
+def bs_reconcile_holdings(chain, addr, h, limit=25):
+    """Blockscout の残高インデックスが欠落する銘柄（例: Base の O）を、tokentx の差引 → 価格あり → balanceOf で補完"""
+    net = defaultdict(float); meta = {}
+    for t in bs_compat_all(chain, {"module": "account", "action": "tokentx", "address": addr, "startblock": 0, "endblock": 99999999, "sort": "asc"}) or []:
+        dec = int(t.get("tokenDecimal") or 18); k = t["contractAddress"].lower(); v = int(t["value"]) / 10 ** dec
+        net[k] += v if t["to"].lower() == addr.lower() else -v; meta[k] = (t.get("tokenSymbol") or "?", dec)
+    missing = [k for k, v in net.items() if v > 1e-6 and (k not in h or h[k]["amount"] <= 0)]
+    if not missing: return
+    prefetch_prices(chain, missing)
+    priced = [k for k in missing if _px.get((chain, k))][:limit]     # 価格の付く（=流動性のある）銘柄だけ確認
+    for k in priced:
+        raw = rpc_balance_of(chain, k, addr)
+        if raw:
+            sym, dec = meta[k]; h[k] = {"symbol": sym, "amount": raw / 10 ** dec, "contract": k, "price": _px.get((chain, k))}
+            log(f"  残高補完 {chain} {short(addr)} {sym} {raw / 10 ** dec:,.4g}（Blockscout 索引に無く balanceOf で確認）")
+        time.sleep(0.2)
 
 def bs_has_activity(chain, addr):
     res = bs_compat(chain, {"module": "account", "action": "txlist", "address": addr, "page": 1, "offset": 1, "sort": "desc"})
