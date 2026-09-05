@@ -82,6 +82,7 @@ NOTIFY_MAX_AGE_H = float(CFG.get("notify_max_age_hours", 48))        # これよ
 CHILD_MAX_AGE_D = float(CFG.get("child_detect_max_age_days", 30))    # これより古い送金からは子ウォレットを起こさない
 SERVICE_PREFIX = re.compile(r"^0x00aa", re.I)
 BLOCKSCOUT_PAGE = 10000
+NR_HEAD_MARGIN = int(CFG.get("nodereal_head_margin_blocks", 40))   # BSC 先頭からこのブロック数だけ手前まで取得（次回に持ち越し）
 
 S = requests.Session()
 S.headers.update({"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36",
@@ -411,12 +412,13 @@ def fetch_rows(chain, addr):
         return rows, (max(r["block"] for r in rows) if rows else cursor.get(key, since - 1))
     latest = nr_block_number(chain)
     if not latest: return None, None
+    head = latest - NR_HEAD_MARGIN          # NodeReal のインデクサは先頭から数ブロック遅れる（"blockNum not reached" 対策）
     if key in cursor: lo = cursor[key] + 1
-    else: lo = max(0, latest - nr_lookback_blocks(chain, latest, INITIAL_LOOKBACK_H))
-    if lo > latest: return [], cursor.get(key)
-    rows = nr_rows(chain, addr, lo, latest)
+    else: lo = max(0, head - nr_lookback_blocks(chain, latest, INITIAL_LOOKBACK_H))
+    if lo > head: return [], cursor.get(key)
+    rows = nr_rows(chain, addr, lo, head)
     if rows is None: return None, None
-    return rows, latest
+    return rows, head
 
 def is_contract(chain, addr):
     for _ in range(2):
