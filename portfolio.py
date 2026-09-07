@@ -75,7 +75,7 @@ def flow_of(e, ctx):
     if k in SERVICE_IN_KINDS: return "buy" if b == "risk" else "cash"
     if k == "サービスへ送金": return "out" if b == "risk" else "cash"
     if k in ("外部へ送金", "バーン"): return "out"
-    if k == "受取": return "in"
+    if k in ("受取", "受取(新規トークン)"): return "in"
     return "other"
 
 # ------------------------------------------------------------ スナップショット

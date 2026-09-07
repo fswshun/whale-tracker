@@ -35,7 +35,7 @@ tr.sell td:first-child{box-shadow:inset 3px 0 0 var(--sell)}tr.move td:first-chi
 a{color:var(--s1)}
 """
 
-KIND_CLASS = {"売却": "sell", "内部移動": "move", "購入": "buy", "新ウォレット": "buy", "受取(原資未確認)": "warn", "サービスへ送金": "move", "なりすまし": "recv", "バーン": "recv"}
+KIND_CLASS = {"売却": "sell", "内部移動": "move", "購入": "buy", "新ウォレット": "buy", "受取(原資未確認)": "warn", "受取(新規トークン)": "warn", "サービスへ送金": "move", "なりすまし": "recv", "バーン": "recv"}
 def kcls(kind):
     for k, c in KIND_CLASS.items():
         if kind.startswith(k): return c

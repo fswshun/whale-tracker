@@ -85,7 +85,9 @@ MOVE_MIN_USD = float(CFG.get("move_min_usd", 5000))          # 一覧・まと�
 PRICE_ALERT_PCT = float(CFG.get("price_move_alert_pct", 5))  # 1時間でリスク資産がこの%動いたらまとめを送る
 DAILY_HOUR_UTC = int(CFG.get("daily_report_hour_utc", 0))    # 日次レポート時刻（0 UTC = 9:00 JST）
 PEER_REPOS = CFG.get("peer_repos", ["fswshun/whale-tracker", "fswshun/whale-unipcs", "fswshun/whale-avast", "fswshun/whale-kyle"])   # 同時買い検出の相手
-CROSS_MIN_USD = float(CFG.get("cross_buy_min_usd", 1000))    # 同時買いに数える最小額（1人あたり）
+CROSS_MIN_USD = float(CFG.get("cross_buy_min_usd", 5000))    # 同時買いに数える最小額（1人あたり）
+NEW_TOKEN_H = float(CFG.get("new_token_hours", 24))            # 上場からこの時間以内の銘柄を執行サービス経由で少額受け取った場合は「新規トークン受取」（エアドロップ疑い）
+NEW_TOKEN_MAX_USD = float(CFG.get("new_token_max_usd", 20000))
 CTX = {"chains": CHAINS, "known_stables": KNOWN_STABLES}
 RUN_BUDGET_S = float(CFG.get("run_budget_minutes", 18)) * 60   # これを超えたら残りは次回に回して保存だけ行う（Actions timeout 対策）
 PRICE_CACHE_H = 24     # DexScreener が落ちている時に使う前回価格の有効時間
@@ -720,6 +722,7 @@ def has_activity(chain, addr):
 # ------------------------------------------------------------ 価格
 _px = {}                                                   # (chain, contract) -> price or None（この実行内のキャッシュ）
 _liq = {}                                                  # (chain, contract) -> DexScreener 流動性 USD
+_created = {}                                              # (chain, contract) -> ペア作成時刻 (epoch 秒)
 CTX["quote"] = lambda ch, c: (_px.get((ch, L(c or ""))), _liq.get((ch, L(c or ""))))
 price_cache = jload(DATA / "prices.json", {})              # "chain:contract" -> {"px": .., "ts": ..}（前回価格。API 不調時の保険）
 
@@ -727,13 +730,26 @@ def _pair_price(p):
     liq = float((p.get("liquidity") or {}).get("usd") or 0)
     return (liq, float(p["priceUsd"])) if liq >= MIN_LIQ_USD and p.get("priceUsd") else (liq, None)
 
+def _note_created(chain, contract, p):
+    c = p.get("pairCreatedAt")
+    if c:
+        key = (chain, contract); t = int(c) // 1000
+        _created[key] = min(_created.get(key, t), t)
+        pc = price_cache.setdefault(f"{chain}:{contract}", {}); pc["created"] = min(pc.get("created") or t, t)
+
+def pair_created(chain, contract):
+    key = (chain, L(contract))
+    if key in _created: return _created[key]
+    pc = price_cache.get(f"{chain}:{L(contract)}") or {}
+    return pc.get("created")
+
 def _set_px(chain, contract, px, fetched=True):
     key = (chain, contract)
     if px is None and fetched is False:                  # 取得失敗 → 前回価格で代用
         old = price_cache.get(f"{chain}:{contract}")
         if old and old.get("px") and time.time() - old.get("ts", 0) < PRICE_CACHE_H * 3600: px = old["px"]
     _px[key] = px
-    if px is not None and fetched: price_cache[f"{chain}:{contract}"] = {"px": px, "ts": int(time.time())}
+    if px is not None and fetched: price_cache.setdefault(f"{chain}:{contract}", {}).update({"px": px, "ts": int(time.time())})
 
 def prefetch_prices(chain, contracts):
     """DexScreener の tokens/v1 は 30 アドレスまで一括可。呼び出し回数を減らすため先にまとめて取る"""
@@ -748,7 +764,7 @@ def prefetch_prices(chain, contracts):
         for p in j:
             addr = L((p.get("baseToken") or {}).get("address") or "")
             if addr in cs:
-                liq, px = _pair_price(p)
+                liq, px = _pair_price(p); _note_created(chain, addr, p)
                 if addr not in best or liq > best[addr][0]: best[addr] = (liq, px); _sym[(chain, addr)] = (p.get("baseToken") or {}).get("symbol") or _sym.get((chain, addr))
         for c in chunk: _set_px(chain, c, best.get(c, (0, None))[1]); _liq[(chain, c)] = best.get(c, (0, None))[0]
         time.sleep(0.3)
@@ -769,7 +785,9 @@ def price(chain, symbol, contract):
     if not isinstance(j, list): _set_px(chain, contract, None, fetched=False); return _px[key]
     px = None
     try:
-        if j: liq, px = _pair_price(max(j, key=lambda p: float((p.get("liquidity") or {}).get("usd") or 0))); _liq[key] = liq
+        if j:
+            for p_ in j: _note_created(chain, contract, p_)
+            liq, px = _pair_price(max(j, key=lambda p: float((p.get("liquidity") or {}).get("usd") or 0))); _liq[key] = liq
     except Exception: px = None
     _set_px(chain, contract, px)
     return px
@@ -811,6 +829,7 @@ def classify_tx(chain, owner, trs):
         kind = "コントラクト呼出"
     return kind, outs, ins, cp
 
+_age_probe = set()
 def resolve_purchases(evs):
     """相手先からの受取に対し、全チェーン横断で「同じ相手へ原資を払ったか」を後付けで判定。
        ラベル付きサービスだけでなく、7日以内にクラスターが $500 以上を払った相手（クロスチェーン執行ウォレット等）からの受取も購入扱い"""
@@ -827,6 +846,14 @@ def resolve_purchases(evs):
             e["funding_note"] = "、".join(f"{p['time'][5:16]} {p['amount']:.4g} {p['token']}" for p in paid[:3])
         elif e["kind"] != "受取" or is_service(e["cp"]):
             e["kind"] = "受取(原資未確認)"
+    # 上場直後（NEW_TOKEN_H 以内）の銘柄を執行サービスから少額受け取ったものは、クジラへの宣伝エアドロップの疑い → 買いに数えない
+    cands = [e for e in evs if e["kind"] in ("購入(クロスチェーン)", "受取(原資未確認)") and e["contract"] != "native" and (e.get("usd") or 0) < NEW_TOKEN_MAX_USD]
+    for e in sorted(cands, key=lambda e: -e["ts"]):          # 新しいものから上場時刻を確認（DexScreener 呼び出しは最大 40 銘柄/回）
+        c = pair_created(e["chain"], e["contract"])
+        if c is None and e["ts"] >= time.time() - 3 * 86400 and len(_age_probe) < 40 and e["contract"] not in _age_probe:
+            _age_probe.add(e["contract"]); price(e["chain"], e["token"], e["contract"]); c = pair_created(e["chain"], e["contract"])
+        if c is not None and 0 <= e["ts"] - c < NEW_TOKEN_H * 3600:
+            e["kind"] = "受取(新規トークン)"; e["note"] = f"上場 {(e['ts'] - c) / 3600:.1f} 時間後の少額受取（エアドロップ疑い）"
 
 # ------------------------------------------------------------ 子ウォレット登録
 _children_this_run = defaultdict(int)
