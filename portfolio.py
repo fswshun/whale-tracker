@@ -124,6 +124,8 @@ def cutoff_points(snaps, n=30):
     if not snaps: return []
     first, last = snaps[0]["ts"], snaps[-1]["ts"]; pts = []
     c = (first // DAY + 1) * DAY
+    if c - first > 900:   # 記録開始が 00:00 UTC ちょうどでない場合は「開始」時点を置く（初日の日次レポート用）
+        pts.append({"ts": first, "label": jst(first).strftime("開始 %-m/%-d %H:%M"), "date": jst(first).strftime("%Y-%m-%d"), "snap": snaps[0]})
     while c <= last + 900:
         cand = [s for s in snaps if c - 6 * 3600 <= s["ts"] <= c + 900]
         if cand:
