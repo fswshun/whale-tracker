@@ -5,5 +5,6 @@
   "R4rNJHaffSUotNmqSKNEfDcJE8A7zJUkaoM5Jkd7cYX": "MEV/アービトラージ系の受取口（USDCの小口ドリップ多数、複数クジラに共通）",
   "pfnKWwarhjuKKg3WV3nw3wAE8zuymigT3vuJHwZeL4s": "共有アドレス（avast/kyle に共通）",
   "3bFGiiLnyhwcjhMWHZQDiEhZ13UZujtcykU86JbwnaXx": "分配ボット（avast/kyle に共通）",
-  "BmFdpraQhkiDQE6SnfG5omcA1VwzqfXrwtNYBwWTymy6": "分配ボット（unipcs、数千アドレスにレント額のSOLを送付）"
+  "BmFdpraQhkiDQE6SnfG5omcA1VwzqfXrwtNYBwWTymy6": "分配ボット（unipcs、数千アドレスにレント額のSOLを送付）",
+  "0xca11bde05977b3631167028862be2a173976ca11": "Multicall3（各チェーン共通のコントラクト。ここへの送金は外部流出ではなく一括呼び出し）"
 }
