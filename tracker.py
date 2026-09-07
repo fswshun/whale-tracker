@@ -812,16 +812,21 @@ def classify_tx(chain, owner, trs):
     return kind, outs, ins, cp
 
 def resolve_purchases(evs):
-    """サービスからの受取に対し、全チェーン横断で「同じ相手へ原資を払ったか」を後付けで判定"""
-    pays = [e for e in evs if e["dir"] == "OUT" and (e["token"] in STABLES or e["contract"] == "native") and is_service(e["cp"])]
+    """相手先からの受取に対し、全チェーン横断で「同じ相手へ原資を払ったか」を後付けで判定。
+       ラベル付きサービスだけでなく、7日以内にクラスターが $500 以上を払った相手（クロスチェーン執行ウォレット等）からの受取も購入扱い"""
+    pays = defaultdict(list)
     for e in evs:
-        if e["kind"] in ("サービスから受取", "受取(原資未確認)", "購入(クロスチェーン)"):
-            paid = [p for p in pays if p["cp"] == e["cp"] and 0 <= e["ts"] - p["ts"] <= BUY_MATCH_HOURS * 3600]
-            if paid:
-                e["kind"] = "購入(クロスチェーン)"; e["funding_usd"] = sum(p["usd"] or 0 for p in paid)
-                e["funding_note"] = "、".join(f"{p['time'][5:16]} {p['amount']:.4g} {p['token']}" for p in paid)
-            else:
-                e["kind"] = "受取(原資未確認)"
+        if e["dir"] == "OUT" and e["cp"] and not is_watched(e["cp"]) and (e.get("usd") or 0) >= 500 and e["kind"] not in ("売却(スワップ)", "購入(スワップ)", "スワップ", "売却(スワップ・代金不明)"):
+            pays[e["cp"]].append(e)
+    for e in evs:
+        if e["dir"] != "IN" or not e["cp"] or is_watched(e["cp"]): continue
+        if e["kind"] not in ("サービスから受取", "受取(原資未確認)", "購入(クロスチェーン)", "受取"): continue
+        paid = [p for p in pays.get(e["cp"], []) if 0 <= e["ts"] - p["ts"] <= BUY_MATCH_HOURS * 3600]
+        if paid:
+            e["kind"] = "購入(クロスチェーン)"; e["funding_usd"] = sum(p["usd"] or 0 for p in paid)
+            e["funding_note"] = "、".join(f"{p['time'][5:16]} {p['amount']:.4g} {p['token']}" for p in paid[:3])
+        elif e["kind"] != "受取" or is_service(e["cp"]):
+            e["kind"] = "受取(原資未確認)"
 
 # ------------------------------------------------------------ 子ウォレット登録
 _children_this_run = defaultdict(int)

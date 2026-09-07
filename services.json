@@ -6,5 +6,6 @@
   "pfnKWwarhjuKKg3WV3nw3wAE8zuymigT3vuJHwZeL4s": "共有アドレス（avast/kyle に共通）",
   "3bFGiiLnyhwcjhMWHZQDiEhZ13UZujtcykU86JbwnaXx": "分配ボット（avast/kyle に共通）",
   "BmFdpraQhkiDQE6SnfG5omcA1VwzqfXrwtNYBwWTymy6": "分配ボット（unipcs、数千アドレスにレント額のSOLを送付）",
-  "0xca11bde05977b3631167028862be2a173976ca11": "Multicall3（各チェーン共通のコントラクト。ここへの送金は外部流出ではなく一括呼び出し）"
+  "0xca11bde05977b3631167028862be2a173976ca11": "Multicall3（各チェーン共通のコントラクト。ここへの送金は外部流出ではなく一括呼び出し）",
+  "0xb92fe925dc43a0ecde6c8b1a2709c170ec4fff4f": "クロスチェーン執行サービス（unipcs/avast/kyle が BSC で BTCB 等を払い、Robinhood 側でトークンを受け取る。ここからの受取＝購入）"
 }
