@@ -102,7 +102,8 @@ NOTIFY_MAX_AGE_H = float(CFG.get("notify_max_age_hours", 48))        # これよ
 CHILD_MAX_AGE_D = float(CFG.get("child_detect_max_age_days", 30))    # これより古い送金からは子ウォレットを起こさない
 MAX_WALLETS = int(CFG.get("max_wallets", 40))                        # クラスターの上限（超えたら自動追加を止めて警告）
 MAX_CHILDREN_PER_RUN = int(CFG.get("max_children_per_wallet_per_run", 8))   # 1回の実行で1つの親から起こす子の上限（分配ボット対策）
-MIN_SEED_NATIVE = {"solana": 0.005, "default": 0.0}                  # 種銭と見なす最小ネイティブ量（Solana の ATA レント 0.002 SOL を除外）
+MIN_SEED_NATIVE = {"solana": float(CFG.get("solana_min_seed_sol", 0.2)), "default": 0.0}   # 種銭と見なす最小ネイティブ量（Solana はボットの少額撒きを除外）
+SOLANA_MAX_DEPTH = int(CFG.get("solana_max_depth", 1))                # Solana で子ウォレットを追う深さ（1=本体の直接の子まで）
 SERVICE_PREFIX = re.compile(r"^0x00aa", re.I)
 BLOCKSCOUT_PAGE = 10000
 NR_HEAD_MARGIN = int(CFG.get("nodereal_head_margin_blocks", 40))   # BSC 先頭からこのブロック数だけ手前まで取得（次回に持ち越し）
@@ -127,6 +128,8 @@ events = [json.loads(l) for l in open(DATA / "events.jsonl")] if (DATA / "events
 snapshots = P.load_snapshots(DATA / "snapshots.jsonl")   # クラスター合算の残高履歴（1時間ごと、7日超は日次）
 token_meta = jload(DATA / "token_meta.json", {})          # "solana:mint" -> {symbol, decimals}（Solana はイベントにシンボルが無いため）
 labels = {L(k): v for k, v in CFG.get("labels", {}).items()}
+SERVICES = {k: v for k, v in jload(CODE_DIR / "services.json", {}).items() if not k.startswith("_")}   # 共有サービス/ボット（コードリポで一元管理）
+labels.update({L(k): v for k, v in SERVICES.items()})
 
 for a in CFG["main_wallets"]:
     wallets.setdefault(L(a), {"role": "本体", "parent": None, "first_seen": None, "chains": []})
@@ -799,9 +802,16 @@ def register_child(chain, parent, cp, first_seen, queue):
     wallets[cp] = {"role": child_role(wallets[parent]["role"]), "parent": parent, "first_seen": first_seen, "chains": [chain]}
     queue.append(cp); log(f"  🆕 監視追加 {wallets[cp]['role']} {cp} (親 {short(parent)}, {chain})"); return True
 
+def wallet_depth(a):
+    d = 0
+    while wallets.get(a, {}).get("parent"): a = wallets[a]["parent"]; d += 1
+    return d
+
 def try_register(chain, parent, cp, ev, queue):
     """未知アドレスが EOA なら子として登録。判定不能なら pending に積んで次回再判定"""
     if cp in wallets: return True                      # 同じ tx 内の複数行などで二重登録しない
+    if is_service(cp): return False
+    if chain == "solana" and wallet_depth(parent) + 1 > SOLANA_MAX_DEPTH: return False   # Solana はボットの連鎖が深くなりやすいので深さ制限
     r = is_contract(chain, cp)
     if r is False: return register_child(chain, parent, cp, ev["time"], queue)
     if r is None and not any(p["addr"] == cp for p in pending_eoa):
