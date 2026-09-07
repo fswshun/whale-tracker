@@ -147,18 +147,23 @@ def group_trades(evs, flow_sel, ctx, min_usd=0.0):
             if flow_of(e, ctx) != flow_sel: continue
             key = (w, e["chain"], (e["contract"] or "").lower())
             a = agg.setdefault(key, {"wallet": w, "chain": e["chain"], "contract": (e["contract"] or "").lower(), "sym": e["token"], "amount": 0.0, "usd": 0.0,
-                                     "n": 0, "other": defaultdict(float), "first": e["ts"], "last": e["ts"], "funding": 0.0, "note": ""})
+                                     "counter_usd": 0.0, "n": 0, "other": defaultdict(float), "first": e["ts"], "last": e["ts"], "funding": 0.0, "note": ""})
             a["amount"] += e["amount"]; a["usd"] += e.get("usd") or 0.0; a["n"] += 1
             a["first"] = min(a["first"], e["ts"]); a["last"] = max(a["last"], e["ts"])
             if e.get("funding_usd"): a["funding"] += e["funding_usd"]; a["note"] = e.get("funding_note", "")
             for l in legs:
-                if l["dir"] != e["dir"] and l["amount"] > 0: a["other"][l["token"]] += l["amount"]
-    out = [a for a in agg.values() if a["usd"] >= min_usd]
-    for a in out: a["other"] = dict(a["other"])
-    return sorted(out, key=lambda a: -a["usd"])
+                if l["dir"] != e["dir"] and l["amount"] > 0:
+                    a["other"][l["token"]] += l["amount"]; a["counter_usd"] += l.get("usd") or 0.0   # 相手足の時価＝支払額/受取額
+    out = []
+    for a in agg.values():
+        a["other"] = dict(a["other"])
+        a["value"] = a["counter_usd"] if a["counter_usd"] > 0 else a["usd"]     # 表示・集計に使う金額（支払/受取ベース、無ければ銘柄側時価）
+        a["unit"] = a["value"] / a["amount"] if a["amount"] else None
+        if a["value"] >= min_usd: out.append(a)
+    return sorted(out, key=lambda a: -a["value"])
 
 def other_leg_text(a):
-    if a["other"]: return "、".join(f"{fmt_qty(v)} {k}" for k, v in sorted(a["other"].items(), key=lambda kv: -kv[1])[:2])
+    if a["other"]: return "、".join(f"{fmt_qty(v)} {k}" for k, v in sorted(a["other"].items(), key=lambda kv: -kv[1])[:2]) + (f" ≈ {fmt_usd(a['counter_usd'])}" if a.get("counter_usd") else "")
     if a["funding"]: return f"原資 {fmt_usd(a['funding'])}（{a['note'][:40]}）" if a["note"] else f"原資 {fmt_usd(a['funding'])}"
     return "相手不明"
 
@@ -179,9 +184,12 @@ def bridge(p0, p1, events, ctx, min_usd=5000.0):
                         and f"{e['chain']}:{(e['contract'] or '').lower()}" in s1["pos"]], "in", ctx)
     cash_outs = group_trades([e for e in evs if bucket_of(e["chain"], e["contract"], ctx) != "risk" and e["kind"] in ("外部へ送金", "バーン")], "out", ctx)
     internal = [e for e in evs if flow_of(e, ctx) == "internal" and e["dir"] == "OUT" and (e.get("usd") or 0) >= min_usd]
-    B, S, O, I = (sum(a["usd"] for a in buys), sum(a["usd"] for a in sells), sum(a["usd"] for a in outs), sum(a["usd"] for a in ins))
+    B_val, S_val = sum(a["usd"] for a in buys), sum(a["usd"] for a in sells)          # 銘柄側の時価（リスク資産に入った/出た額）
+    B, S = sum(a["value"] for a in buys), sum(a["value"] for a in sells)              # 支払った額 / 受け取った額
+    O, I = sum(a["value"] for a in outs), sum(a["value"] for a in ins)
+    exec_cost = (B_val - B) + (S - S_val)          # 約定コスト（スリッページ・価格インパクト）。負＝損
     risk0, risk1 = s0["risk"], s1["risk"]
-    resid = risk1 - risk0 - price - B + S + O - I
+    resid = risk1 - risk0 - price - B_val + S_val + O - I
     # 銘柄ごとの 枚数・単価・評価額 の前後比較（リスク資産）。評価額の増減を 値動き分 と 枚数増減分 に分ける
     positions = []
     for k in set(s0["pos"]) | set(s1["pos"]):
@@ -198,7 +206,7 @@ def bridge(p0, p1, events, ctx, min_usd=5000.0):
     return {"t0": t0, "t1": t1, "label0": p0["label"], "label1": p1["label"],
             "total0": s0["total"], "total1": s1["total"], "risk0": risk0, "risk1": risk1,
             "quasi0": s0["quasi"], "quasi1": s1["quasi"], "cash0": s0["cash"], "cash1": s1["cash"],
-            "price": price, "buys": B, "sells": S, "out": O, "in": I, "resid": resid,
+            "price": price, "buys": B, "sells": S, "out": O, "in": I, "resid": resid, "exec_cost": exec_cost, "buys_val": B_val, "sells_val": S_val,
             "realized": S + O, "realized_pct": ((S + O) / risk0 * 100) if risk0 else None,
             "total_pct": ((s1["total"] / s0["total"] - 1) * 100) if s0["total"] else None,
             "risk_pct": ((risk1 / risk0 - 1) * 100) if risk0 else None,
@@ -222,9 +230,14 @@ def buy_alert_lines(buys, names, ctx):
     lines = []
     for a in buys:
         who = names.get(a["wallet"], a["wallet"][:6]); t = jst(a["last"]).strftime("%m-%d %H:%M")
-        times = f"（{a['n']}回）" if a["n"] > 1 else ""
-        lines.append(f"🟢 買い  {who}  {a['sym']} {fmt_qty(a['amount'])} ≈ {fmt_usd(a['usd'])}\n"
-                     f"   支払 {other_leg_text(a)}{times}  {t} JST  {chain_name(a['chain'], ctx)}")
+        times = f"、{a['n']}回" if a["n"] > 1 else ""
+        unit = f"、平均 ${a['unit']:.4g}/枚" if a.get("unit") else ""
+        lines.append(f"🟢 買い  {who}  {a['sym']} {fmt_qty(a['amount'])} ≈ {fmt_usd(a['value'])}\n"
+                     f"   支払 {other_leg_text(a)}{times}{unit}  {t} JST  {chain_name(a['chain'], ctx)}")
+        q = ctx.get("quote")
+        if q:
+            px, liq = q(a["chain"], a["contract"])
+            if px: lines.append(f"   いま ${px:.4g}/枚" + (f"（取得比 {(px / a['unit'] - 1) * 100:+.0f}%）" if a.get("unit") else "") + (f"　流動性 {fmt_usd(liq)}" if liq else ""))
         link = dex_link(a["chain"], a["contract"], ctx)
         if link: lines.append(f"   {link}")
     return lines
@@ -234,14 +247,15 @@ def digest_text(br, names, ctx, title, pages="", max_items=4):
               f"　リスク {fmt_usd(br['risk1'])}　準現金 {fmt_usd(br['quasi1'])}　現金 {fmt_usd(br['cash1'])}"]
     L.append(f"リスク資産 {fmt_usd(br['risk0'])} → {fmt_usd(br['risk1'])}：値動き {fmt_usd(br['price'], True)} / 利確 {fmt_usd(-br['realized'], True)}"
              f"（{br['realized_pct']:.1f}%）/ 買い {fmt_usd(br['buys'], True)}" + (f" / 流入 {fmt_usd(br['in'], True)}" if br["in"] else "")
+             + (f" / 約定コスト {fmt_usd(br['exec_cost'], True)}" if abs(br["exec_cost"]) >= 0.005 * max(br["risk0"], 1) else "")
              + (f" / 誤差 {fmt_usd(br['resid'], True)}" if abs(br["resid"]) >= 0.02 * max(br["risk0"], 1) else ""))
-    m = br.get("min_usd", 0); sells = [a for a in br["sell_list"] if a["usd"] >= m]; outs = [a for a in br["out_list"] + br["cash_out_list"] if a["usd"] >= m]; buys = [a for a in br["buy_list"] if a["usd"] >= m]
+    m = br.get("min_usd", 0); sells = [a for a in br["sell_list"] if a["value"] >= m]; outs = [a for a in br["out_list"] + br["cash_out_list"] if a["value"] >= m]; buys = [a for a in br["buy_list"] if a["value"] >= m]
     if sells:
-        L.append("🔻 利確: " + "、".join(f"{names.get(a['wallet'], '?')} {a['sym']} {fmt_qty(a['amount'])} → {other_leg_text(a)} ({fmt_usd(a['usd'])})" for a in sells[:max_items]))
+        L.append("🔻 利確: " + "、".join(f"{names.get(a['wallet'], '?')} {a['sym']} {fmt_qty(a['amount'])} → {other_leg_text(a)}" for a in sells[:max_items]))
     if outs:
-        L.append("📤 外部流出: " + "、".join(f"{names.get(a['wallet'], '?')} {a['sym']} {fmt_qty(a['amount'])} ({fmt_usd(a['usd'])})" for a in outs[:max_items]))
+        L.append("📤 外部流出: " + "、".join(f"{names.get(a['wallet'], '?')} {a['sym']} {fmt_qty(a['amount'])} ({fmt_usd(a['value'])})" for a in outs[:max_items]))
     if buys:
-        L.append("🟢 買い: " + "、".join(f"{names.get(a['wallet'], '?')} {a['sym']} {fmt_qty(a['amount'])} ({fmt_usd(a['usd'])})" for a in buys[:max_items]))
+        L.append("🟢 買い: " + "、".join(f"{names.get(a['wallet'], '?')} {a['sym']} {fmt_qty(a['amount'])} ({fmt_usd(a['value'])})" for a in buys[:max_items]))
     mv = [m for m in br["movers"] if abs(m["usd"]) >= 0.01 * max(br["risk0"], 1)][:max_items]
     if mv: L.append("📈 値動き: " + "、".join(f"{m['sym']} {m['pct']:+.1f}% ({fmt_usd(m['usd'], True)})" for m in mv))
     if br["internal"]:

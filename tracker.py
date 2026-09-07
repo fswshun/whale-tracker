@@ -473,6 +473,8 @@ def has_activity(chain, addr): return bs_has_activity(chain, addr) if provider(c
 
 # ------------------------------------------------------------ 価格
 _px = {}                                                   # (chain, contract) -> price or None（この実行内のキャッシュ）
+_liq = {}                                                  # (chain, contract) -> DexScreener 流動性 USD
+CTX["quote"] = lambda ch, c: (_px.get((ch, (c or "").lower())), _liq.get((ch, (c or "").lower())))
 price_cache = jload(DATA / "prices.json", {})              # "chain:contract" -> {"px": .., "ts": ..}（前回価格。API 不調時の保険）
 
 def _pair_price(p):
@@ -502,7 +504,7 @@ def prefetch_prices(chain, contracts):
             if addr in cs:
                 liq, px = _pair_price(p)
                 if addr not in best or liq > best[addr][0]: best[addr] = (liq, px)
-        for c in chunk: _set_px(chain, c, best.get(c, (0, None))[1])
+        for c in chunk: _set_px(chain, c, best.get(c, (0, None))[1]); _liq[(chain, c)] = best.get(c, (0, None))[0]
         time.sleep(0.3)
 
 def price(chain, symbol, contract):
@@ -521,7 +523,7 @@ def price(chain, symbol, contract):
     if not isinstance(j, list): _set_px(chain, contract, None, fetched=False); return _px[key]
     px = None
     try:
-        if j: px = _pair_price(max(j, key=lambda p: float((p.get("liquidity") or {}).get("usd") or 0)))[1]
+        if j: liq, px = _pair_price(max(j, key=lambda p: float((p.get("liquidity") or {}).get("usd") or 0))); _liq[key] = liq
     except Exception: px = None
     _set_px(chain, contract, px)
     return px

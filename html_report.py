@@ -112,10 +112,11 @@ def bridge_panel(br, names, ctx, idx, min_usd):
             link = P.dex_link(a["chain"], a["contract"], ctx); lk = f"<a href='{esc(link)}' target='_blank' rel='noopener'>DexScreener</a>" if link else ""
             other = "外部" if kind == "out" else P.other_leg_text(a)
             times = f" ×{a['n']}" if a["n"] > 1 else ""
+            unit = f"<div class='sub'>${a['unit']:.4g}/枚</div>" if a.get("unit") else ""
             body += (f"<tr class='{'buy' if kind == 'buy' else 'sell'}'><td>{jst(a['last'])}{esc(times)}</td><td>{who(a['wallet'])}</td><td>{esc(a['sym'])}</td>"
-                     f"<td class='r'>{esc(P.fmt_qty(a['amount']))}</td><td class='r'>{usd(a['usd'])}</td><td class='w'>{esc(other)}</td><td>{esc(P.chain_name(a['chain'], ctx))}</td><td>{lk}</td></tr>")
+                     f"<td class='r'>{esc(P.fmt_qty(a['amount']))}</td><td class='r'>{usd(a['value'])}{unit}</td><td class='w'>{esc(other)}</td><td>{esc(P.chain_name(a['chain'], ctx))}</td><td>{lk}</td></tr>")
         return f"<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
-    risk0 = max(br["risk0"], 1.0); scale = max(abs(br["price"]), br["buys"], br["realized"], br["in"], abs(br["resid"]), 1.0)
+    risk0 = max(br["risk0"], 1.0); scale = max(abs(br["price"]), br["buys"], br["realized"], br["in"], abs(br["resid"]), abs(br.get("exec_cost", 0)), 1.0)
     def bar(v, color):
         w = min(abs(v) / scale * 100, 100)
         return f"<span class='bar'><i style='left:{0 if v >= 0 else 100 - w:.0f}%;width:{w:.0f}%;background:{color}'></i></span>"
@@ -123,6 +124,7 @@ def bridge_panel(br, names, ctx, idx, min_usd):
             (f"利確（売り {P.fmt_usd(br['sells'])} ＋ 外部流出 {P.fmt_usd(br['out'])}）", -br["realized"], "var(--sell)"),
             ("買い", br["buys"], "var(--buy)")]
     if br["in"]: rows.append(("外部からの流入", br["in"], "var(--hold)"))
+    if abs(br.get("exec_cost", 0)) >= 0.005 * risk0: rows.append(("約定コスト（スリッページ・価格インパクト）", br["exec_cost"], "var(--warn)"))
     if abs(br["resid"]) >= 0.005 * risk0: rows.append(("その他・誤差（エアドロップ、価格取得漏れ）", br["resid"], "var(--mute)"))
     grid = "".join(f"<span class='k'>{esc(k)}</span>{bar(v, c)}<span class='v {cls_delta(v)}'>{P.fmt_usd(v, True)}</span>" for k, v, c in rows)
     realized_pct = f"（利確率 {br['realized_pct']:.1f}%）" if br["realized_pct"] else ""
@@ -151,9 +153,9 @@ def bridge_panel(br, names, ctx, idx, min_usd):
               + (f"<div class='sub'>ほか {len(pos) - 25} 銘柄（${min_usd:,.0f} 以上）</div>" if len(pos) > 25 else "")) if pos else "<div class='sub'>対象なし</div>"
     return (f"<div class='day' id='day-{idx}'{'' if idx == 0 else ' hidden'}>{head}<div class='bridge'>{grid}"
             f"<span class='k tot'>リスク資産の増減 合計</span><span class='tot'></span><span class='v tot {cls_delta(br['risk1'] - br['risk0'])}'>{P.fmt_usd(br['risk1'] - br['risk0'], True)}</span></div>"
-            f"<h3>🟢 買い（${min_usd:,.0f} 以上）</h3>{trades_table([a for a in br['buy_list'] if a['usd'] >= min_usd], 'buy')}"
-            f"<h3>🔻 利確 ＝ 売り</h3>{trades_table([a for a in br['sell_list'] if a['usd'] >= min_usd], 'sell')}"
-            f"<h3>📤 外部流出（クラスター外のアドレスへ）</h3>{trades_table([a for a in br['out_list'] + br['cash_out_list'] if a['usd'] >= min_usd], 'out')}"
+            f"<h3>🟢 買い（${min_usd:,.0f} 以上、金額＝支払った額）</h3>{trades_table([a for a in br['buy_list'] if a['value'] >= min_usd], 'buy')}"
+            f"<h3>🔻 利確 ＝ 売り（金額＝受け取った額）</h3>{trades_table([a for a in br['sell_list'] if a['value'] >= min_usd], 'sell')}"
+            f"<h3>📤 外部流出（クラスター外のアドレスへ）</h3>{trades_table([a for a in br['out_list'] + br['cash_out_list'] if a['value'] >= min_usd], 'out')}"
             f"<h3>📈 値動きの寄与（上位）</h3>{mv}"
             f"<h3>📋 銘柄ごとの枚数・単価・評価額（{esc(br['label0'])} → {esc(br['label1'])}、${min_usd:,.0f} 以上）</h3>{ptable}{internal}</div>")
 
@@ -215,7 +217,7 @@ def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label,
            f"<section class='panel'><h2>主要イベント（${threshold:,.0f} 以上・新ウォレット）</h2><div style='overflow-x:auto'><table><thead><tr><th>時刻(JST)</th><th>誰</th><th>種別</th><th>方向</th><th>銘柄</th><th class='r'>数量</th><th class='r'>USD</th><th>相手</th></tr></thead><tbody>{erows or '<tr><td colspan=8 class=sub>なし</td></tr>'}</tbody></table></div></section></details>")
     rules = ("<section class='panel'><h2>読み方</h2><div class='sub'>"
              "<p>リスク資産＝アルトコイン。準現金＝ETH・BNB。現金＝本物のステーブル。時点は毎日 9:00 JST（00:00 UTC）と現在。</p>"
-             "<p>値動き＝前時点の保有数量 × 価格差。利確＝リスク資産を売った額（ETH・USDC・別銘柄へ）＋クラスター外へ送った額。買い＝リスク資産を買った額（スワップ・クロスチェーン購入）。誤差＝この分解で説明できない残り（エアドロップ、価格取得漏れなど）。</p>"
+             "<p>値動き＝前時点の保有数量 × 価格差。利確＝リスク資産を売って受け取った額（ETH・USDC・別銘柄）＋クラスター外へ送った額。買い＝リスク資産を買うのに支払った額（スワップ・クロスチェーン購入）。約定コスト＝支払った額と受け取った銘柄の時価の差（流動性の薄い銘柄を大量に買うと大きくなる）。誤差＝この分解で説明できない残り（エアドロップ、価格取得漏れなど）。</p>"
              "<p>本体・子・孫の間の移動は総資産を変えないので内部移動として折りたたみ。$5,000 未満の動きは集計には含むが一覧には出さない。</p></div></section>")
     doc = f"""<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>クジラ資産レポート</title><style>{CSS}</style></head><body>
