@@ -52,7 +52,7 @@ def role_names(wallets):
     n_main = sum(1 for w in wallets if wallets[w]["role"] == "本体")
     for w in order:
         r = wallets[w]["role"]; cnt[r] += 1
-        names[w] = ("本体" if n_main == 1 else f"本体{cnt[r]}") if r == "本体" else f"{r}{cnt[r]}"
+        names[w] = ("本体" if n_main == 1 else ("本体SOL" if not w.startswith("0x") else "本体EVM")) if r == "本体" else f"{r}{cnt[r]}"
     return names
 
 # ------------------------------------------------------------ 分類
