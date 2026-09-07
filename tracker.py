@@ -42,6 +42,7 @@ DATA.mkdir(exist_ok=True); DOCS.mkdir(exist_ok=True)
 CFG = json.load(open(ROOT / "config.json"))
 NODEREAL_KEY = os.getenv("NODEREAL_KEY", "")
 HELIUS_KEY = os.getenv("HELIUS_KEY", "")           # Solana 用（https://dashboard.helius.dev の無料キー）
+ALCHEMY_BNB_KEY = os.getenv("ALCHEMY_BNB_KEY", "")  # BSC 用の代替（https://dashboard.alchemy.com、BNB Smart Chain の App キー）。NodeReal が無い時に使う
 WHALE_NAME = os.getenv("WHALE_NAME", "")           # 複数クジラ運用時の名前（config.json の name でも可）
 BLOCKSCOUT_KEY = os.getenv("BLOCKSCOUT_KEY", "")   # 推奨。dev.blockscout.com の無料 PRO キー（proapi_…）。無いと各インスタンスの公開APIを叩き 429 になりやすい
 BLOCKSCOUT_PRO = "https://api.blockscout.com"
@@ -52,7 +53,7 @@ WETH_ETH = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
 CHAINS = {
     "robinhood": {"name": "Robinhood Chain", "provider": "blockscout", "base": "https://robinhoodchain.blockscout.com", "chain_id": 4663, "rpcs": [],
                   "native": "ETH", "dex": "robinhood", "wnative": "", "native_ref": ("ethereum", WETH_ETH)},
-    "bsc":       {"name": "BSC", "provider": "nodereal", "rpc": "https://bsc-mainnet.nodereal.io/v1/{key}",
+    "bsc":       {"name": "BSC", "provider": "nodereal", "rpc": "https://bsc-mainnet.nodereal.io/v1/{key}", "alchemy": "https://bnb-mainnet.g.alchemy.com/v2/{key}",
                   "native": "BNB", "dex": "bsc", "wnative": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"},
     "ethereum":  {"name": "Ethereum", "provider": "blockscout", "base": "https://eth.blockscout.com", "chain_id": 1, "rpcs": ["https://eth.llamarpc.com", "https://cloudflare-eth.com"],
                   "native": "ETH", "dex": "ethereum", "wnative": WETH_ETH},
@@ -338,9 +339,24 @@ def bs_has_activity(chain, addr):
     return bool(res)
 
 # ------------------------------------------------------------ NodeReal（BSC）
+def bsc_url(chain):
+    """BSC の JSON-RPC 接続先。NodeReal 優先、無ければ Alchemy"""
+    if NODEREAL_KEY: return CHAINS[chain]["rpc"].format(key=NODEREAL_KEY)
+    if ALCHEMY_BNB_KEY: return CHAINS[chain]["alchemy"].format(key=ALCHEMY_BNB_KEY)
+    return None
+def use_alchemy(): return not NODEREAL_KEY and bool(ALCHEMY_BNB_KEY)
+ALCHEMY_METHODS = {"nr_getAssetTransfers": "alchemy_getAssetTransfers", "nr_getTokenHoldings": None}
+
 def nr_rpc(chain, method, params):
-    if not NODEREAL_KEY: return None
-    j = http_json("POST", CHAINS[chain]["rpc"].format(key=NODEREAL_KEY), json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
+    url = bsc_url(chain)
+    if not url: return None
+    if use_alchemy():
+        if method == "nr_getTokenHoldings": return None                      # Alchemy は別経路（alc_holdings）
+        method = ALCHEMY_METHODS.get(method, method)
+        if method == "alchemy_getAssetTransfers":
+            p = dict(params[0]); p["category"] = ["erc20" if c == "20" else c for c in p.get("category", [])]; p["withMetadata"] = True
+            params = [p]
+    j = http_json("POST", url, json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
     if not isinstance(j, dict): return None
     if "error" in j: warn(f"{chain} {method}: {j['error']}"); return None
     return j.get("result")
@@ -389,7 +405,11 @@ def nr_rows(chain, addr, from_block, to_block):
     for t in trs:
         if str(t.get("receiptsStatus", "1")) == "0": continue
         cat = t.get("category"); frm = L(t.get("from") or ""); to = L(t.get("to") or "")
-        raw = t.get("value"); dec = hx(t.get("decimal")) if t.get("decimal") is not None else 18
+        if cat == "erc20": cat = "20"                                           # Alchemy 形式
+        rc = t.get("rawContract") or {}
+        if rc and t.get("contractAddress") is None: t["contractAddress"] = rc.get("address")
+        if t.get("blockTimeStamp") is None and (t.get("metadata") or {}).get("blockTimestamp"): t["blockTimeStamp"] = t["metadata"]["blockTimestamp"]
+        raw = t.get("value"); dec = hx(t.get("decimal")) if t.get("decimal") is not None else (hx(rc.get("decimal")) if rc.get("decimal") else 18)
         try: amount = hx(raw) / 10 ** dec if isinstance(raw, str) and raw.startswith("0x") else float(raw or 0)
         except Exception: amount = 0.0
         key = (t.get("hash"), cat, frm, to, round(amount, 12))
@@ -406,7 +426,7 @@ def nr_rows(chain, addr, from_block, to_block):
     txs = sorted({r["tx"] for r in rows if r["tx"]}); details = {}
     for i in range(0, len(txs), 50):
         chunk = txs[i:i + 50]
-        j = http_json("POST", CHAINS[chain]["rpc"].format(key=NODEREAL_KEY), json=[{"jsonrpc": "2.0", "id": n, "method": "eth_getTransactionByHash", "params": [tx]} for n, tx in enumerate(chunk)])
+        j = http_json("POST", bsc_url(chain), json=[{"jsonrpc": "2.0", "id": n, "method": "eth_getTransactionByHash", "params": [tx]} for n, tx in enumerate(chunk)])
         if isinstance(j, list):
             for item in j:
                 t = item.get("result") if isinstance(item, dict) else None
@@ -442,7 +462,27 @@ def nr_is_contract(chain, addr):
     if code is None: return None
     return code not in ("0x", "")
 
+def alc_holdings(chain, addr):
+    h = {}
+    bal = nr_rpc(chain, "eth_getBalance", [addr, "latest"])
+    if bal is not None: h["native"] = {"symbol": CHAINS[chain]["native"], "amount": hx(bal) / 1e18, "contract": "native", "price": None}
+    res = nr_rpc(chain, "alchemy_getTokenBalances", [addr, "erc20"])
+    if not isinstance(res, dict): return h
+    items = [t for t in res.get("tokenBalances") or [] if t.get("tokenBalance") not in (None, "0x0", "0x") and not t.get("error")]
+    for t in items[:400]:
+        c = L(t.get("contractAddress") or ""); raw = hx(t.get("tokenBalance")) or 0
+        if raw <= 0 or not c: continue
+        meta = token_meta.get(f"{chain}:{c}")
+        if not meta:
+            m = nr_rpc(chain, "alchemy_getTokenMetadata", [c])
+            if not isinstance(m, dict): continue
+            meta = {"symbol": m.get("symbol") or "?", "decimals": m.get("decimals") if m.get("decimals") is not None else 18}; token_meta[f"{chain}:{c}"] = meta
+        dec = int(meta.get("decimals") or 18); amt = raw / 10 ** dec
+        if amt > 0: h[c] = {"symbol": meta.get("symbol") or "?", "amount": amt, "contract": c, "price": None}
+    return h
+
 def nr_holdings(chain, addr):
+    if use_alchemy(): return alc_holdings(chain, addr)
     h = {}
     bal = nr_rpc(chain, "eth_getBalance", [addr, "latest"])
     if bal is not None: h["native"] = {"symbol": CHAINS[chain]["native"], "amount": hx(bal) / 1e18, "contract": "native", "price": None}
@@ -590,7 +630,7 @@ def addr_fits(chain, a):
     return (not a.startswith("0x") and 32 <= len(a) <= 44) if provider(chain) == "helius" else (a.startswith("0x") and len(a) == 42)
 def chain_available(chain):
     pv = provider(chain)
-    return (bool(NODEREAL_KEY) if pv == "nodereal" else bool(HELIUS_KEY) if pv == "helius" else True)
+    return (bool(NODEREAL_KEY or ALCHEMY_BNB_KEY) if pv == "nodereal" else bool(HELIUS_KEY) if pv == "helius" else True)
 
 def fetch_rows(chain, addr):
     """新規行を取得し (rows, new_cursor) を返す。失敗なら (None, None) でカーソルは進めない"""
@@ -995,7 +1035,7 @@ def html(holdings_doc):
     log("HTML 生成:", out)
 
 if __name__ == "__main__":
-    if not NODEREAL_KEY: warn("NODEREAL_KEY 未設定（BSC は取得できません）")
+    if not NODEREAL_KEY and not ALCHEMY_BNB_KEY: warn("NODEREAL_KEY / ALCHEMY_BNB_KEY どちらも未設定（BSC は取得できません）")
     if not HELIUS_KEY: warn("HELIUS_KEY 未設定（Solana は取得できません）")
     if not BLOCKSCOUT_KEY: warn("BLOCKSCOUT_KEY 未設定（公開インスタンスの API を使うため 429 が出やすくなります）")
     if DRY_RUN: log("DRY_RUN: 通知・保存なし")

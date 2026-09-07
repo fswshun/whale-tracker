@@ -20,6 +20,7 @@ jobs:
       - name: 取得・通知・HTML生成
         env:
           NODEREAL_KEY: ${{ secrets.NODEREAL_KEY }}
+          ALCHEMY_BNB_KEY: ${{ secrets.ALCHEMY_BNB_KEY }}
           BLOCKSCOUT_KEY: ${{ secrets.BLOCKSCOUT_KEY }}
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_CHAT: ${{ secrets.TG_CHAT }}

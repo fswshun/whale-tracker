@@ -16,7 +16,7 @@ import requests
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--name", required=True); ap.add_argument("--wallet", action="append", required=True)
-ap.add_argument("--blockscout", default=""); ap.add_argument("--helius", default=""); ap.add_argument("--nodereal", default="")
+ap.add_argument("--blockscout", default=""); ap.add_argument("--helius", default=""); ap.add_argument("--nodereal", default=""); ap.add_argument("--alchemy", default="")
 ap.add_argument("--tg-token", default=""); ap.add_argument("--tg-chat", default="")
 ap.add_argument("--gh-token", required=True); ap.add_argument("--owner", default="fswshun"); ap.add_argument("--repo", default="")
 ap.add_argument("--code-repo", default="fswshun/whale-tracker")
@@ -57,7 +57,7 @@ p = git("push", "-u", "origin", "main"); print("push:", "OK" if p.returncode == 
 from nacl import encoding, public
 pk = requests.get(f"{API}/repos/{a.owner}/{repo}/actions/secrets/public-key", headers=H, timeout=30).json()
 box = public.SealedBox(public.PublicKey(pk["key"].encode(), encoding.Base64Encoder()))
-for name, val in [("BLOCKSCOUT_KEY", a.blockscout), ("HELIUS_KEY", a.helius), ("NODEREAL_KEY", a.nodereal), ("TG_TOKEN", a.tg_token), ("TG_CHAT", a.tg_chat)]:
+for name, val in [("BLOCKSCOUT_KEY", a.blockscout), ("HELIUS_KEY", a.helius), ("NODEREAL_KEY", a.nodereal), ("ALCHEMY_BNB_KEY", a.alchemy), ("TG_TOKEN", a.tg_token), ("TG_CHAT", a.tg_chat)]:
     if not val: continue
     enc = base64.b64encode(box.encrypt(val.encode())).decode()
     r = requests.put(f"{API}/repos/{a.owner}/{repo}/actions/secrets/{name}", headers=H, json={"encrypted_value": enc, "key_id": pk["key_id"]}, timeout=30)

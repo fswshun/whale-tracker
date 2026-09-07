@@ -26,6 +26,7 @@ jobs:
         env:
           WHALE_ROOT: ${{ github.workspace }}
           NODEREAL_KEY: ${{ secrets.NODEREAL_KEY }}
+          ALCHEMY_BNB_KEY: ${{ secrets.ALCHEMY_BNB_KEY }}
           BLOCKSCOUT_KEY: ${{ secrets.BLOCKSCOUT_KEY }}
           HELIUS_KEY: ${{ secrets.HELIUS_KEY }}
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
