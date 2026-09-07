@@ -294,5 +294,5 @@ def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label,
 <meta name="robots" content="noindex,nofollow"><title>{esc(tl.get("name") or "クジラ")} 資産レポート</title><style>{CSS}</style></head><body>
 <header><h1>{esc(tl.get("name") or "クジラ")} 資産レポート <small>本体 {sum(1 for w in wallets if wallets[w]['role'] == '本体')} ＋ 自動検出 {sum(1 for w in wallets if wallets[w]['role'] != '本体')} ウォレット</small></h1>
 <div class="sub">更新 {P.jst(int(now.timestamp())).strftime('%m-%d %H:%M')} JST（15分ごと）</div></header>
-<main>{hero}{newpos_html}{chart}{matrix_html}{days}{pos_rows}{rules}{old}</main><script>{CHART_JS}</script></body></html>"""
+<main>{hero}{chart}{matrix_html}{days}{pos_rows}{newpos_html}{rules}{old}</main><script>{CHART_JS}</script></body></html>"""
     out_path.write_text(doc, encoding="utf-8")
