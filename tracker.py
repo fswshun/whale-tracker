@@ -76,7 +76,7 @@ KNOWN_STABLES = {
     ("base", "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"),
     ("arbitrum", "0xaf88d065e77c8cc2239327c5edb3a432268e5831"), ("arbitrum", "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9"),
     ("robinhood", "0x5fc5360d0400a0fd4f2af552add042d716f1d168"),
-    ("solana", "EPjFWdd5AufqSSqeM4qBGDNeeQvFcZVxeQd9uumx8dqu"), ("solana", "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"),
+    ("solana", "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"), ("solana", "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"),
 }
 MIN_LIQ_USD = 5000     # DexScreener の流動性がこれ未満のペアの価格は使わない（偽トークン・ゴミ価格対策）
 BUY_ALERT_USD = float(CFG.get("buy_alert_usd", 5000))        # 買いはこの額から即時 Telegram
@@ -99,6 +99,9 @@ PRIMARY_CHAINS = set(CFG.get("primary_chains", ["robinhood", "bsc", "solana"])) 
 WHALE_NAME = WHALE_NAME or CFG.get("name", "")
 NOTIFY_MAX_AGE_H = float(CFG.get("notify_max_age_hours", 48))        # これより古いイベントは通知しない（初回バックフィル対策）
 CHILD_MAX_AGE_D = float(CFG.get("child_detect_max_age_days", 30))    # これより古い送金からは子ウォレットを起こさない
+MAX_WALLETS = int(CFG.get("max_wallets", 40))                        # クラスターの上限（超えたら自動追加を止めて警告）
+MAX_CHILDREN_PER_RUN = int(CFG.get("max_children_per_wallet_per_run", 8))   # 1回の実行で1つの親から起こす子の上限（分配ボット対策）
+MIN_SEED_NATIVE = {"solana": 0.005, "default": 0.0}                  # 種銭と見なす最小ネイティブ量（Solana の ATA レント 0.002 SOL を除外）
 SERVICE_PREFIX = re.compile(r"^0x00aa", re.I)
 BLOCKSCOUT_PAGE = 10000
 NR_HEAD_MARGIN = int(CFG.get("nodereal_head_margin_blocks", 40))   # BSC 先頭からこのブロック数だけ手前まで取得（次回に持ち越し）
@@ -491,14 +494,29 @@ def hl_signatures(addr, until=None, min_ts=None, max_pages=10):
         before = res[-1]["signature"]
     return out
 
+_hl_parsed = {}          # signature -> 解析済み tx（この実行内。ウォレット横断で100件ずつまとめて解析）
+_hl_pending = {}         # wallet -> 新規署名リスト（hl_prefetch で先読み）
 def hl_parse(sigs):
-    """Enhanced Transactions API で解析（100署名/回、100クレジット/回）"""
-    out = []
-    for i in range(0, len(sigs), 100):
-        j = http_json("POST", f"{CHAINS['solana']['api']}/transactions?api-key={HELIUS_KEY}", json={"transactions": sigs[i:i + 100]}, timeout=60)
+    """Enhanced Transactions API で解析（100署名/回、100クレジット/回）。解析済みはキャッシュ"""
+    need = [x for x in dict.fromkeys(sigs) if x not in _hl_parsed]
+    for i in range(0, len(need), 100):
+        j = http_json("POST", f"{CHAINS['solana']['api']}/transactions?api-key={HELIUS_KEY}", json={"transactions": need[i:i + 100]}, timeout=60)
         if not isinstance(j, list): return None
-        out.extend(j); time.sleep(0.15)
-    return out
+        for t in j:
+            if t.get("signature"): _hl_parsed[t["signature"]] = t
+        time.sleep(0.15)
+    return [_hl_parsed[x] for x in sigs if x in _hl_parsed]
+
+def hl_prefetch(addrs):
+    """全 Solana ウォレットの新規署名を先に集め、まとめて解析（呼び出し回数＝クレジット節約）"""
+    allsigs = []
+    for a in addrs:
+        key = f"solana:{a}"
+        sigs = hl_signatures(a, until=cursor[key]) if key in cursor else hl_signatures(a, min_ts=time.time() - INITIAL_LOOKBACK_H * 3600)
+        if sigs is None: continue
+        if len(sigs) >= 1000: warn(f"solana {short(a)}: 新規署名が 1000 件超 → 直近 1000 件のみ処理（高頻度ボット）")
+        _hl_pending[a] = sigs[:1000]; allsigs += [x["signature"] for x in sigs[:1000]]
+    if allsigs: hl_parse(allsigs)
 
 def sym_of(chain, contract):
     return _sym.get((chain, contract)) or (token_meta.get(f"{chain}:{contract}") or {}).get("symbol") or "?"
@@ -557,7 +575,7 @@ def hl_is_contract(addr):
     res = hl_rpc("getAccountInfo", [addr, {"encoding": "base64"}])
     if res is None: return None
     v = res.get("value")
-    if v is None: return False                       # 未作成アカウント＝ウォレット候補
+    if v is None: return True                        # 存在しない（閉じた一時口座・ATA のレント払い先など）→ ウォレットとして追わない
     return bool(v.get("executable")) or v.get("owner") != SOL_SYSTEM
 
 def hl_has_activity(addr):
@@ -587,7 +605,9 @@ def fetch_rows(chain, addr):
         if rows is None: return None, None
         return rows, (max(r["block"] for r in rows) if rows else cursor.get(key, since - 1))
     if provider(chain) == "helius":
-        sigs = hl_signatures(addr, until=cursor[key]) if key in cursor else hl_signatures(addr, min_ts=time.time() - INITIAL_LOOKBACK_H * 3600)
+        if addr in _hl_pending: sigs = _hl_pending.pop(addr)
+        else:
+            sigs = hl_signatures(addr, until=cursor[key], max_pages=1) if key in cursor else hl_signatures(addr, min_ts=time.time() - INITIAL_LOOKBACK_H * 3600, max_pages=1)
         if sigs is None: return None, None
         if not sigs: return [], cursor.get(key)
         parsed = hl_parse([s["signature"] for s in sigs])
@@ -725,14 +745,25 @@ def resolve_purchases(evs):
                 e["kind"] = "受取(原資未確認)"
 
 # ------------------------------------------------------------ 子ウォレット登録
+_children_this_run = defaultdict(int)
 def register_child(chain, parent, cp, first_seen, queue):
+    if len(wallets) >= MAX_WALLETS:
+        warn(f"監視ウォレットが上限 {MAX_WALLETS} に達したため {short(cp)} は追加しない（config の max_wallets）"); return False
+    if wallets.get(parent, {}).get("no_children"): return False
+    if _children_this_run[parent] >= MAX_CHILDREN_PER_RUN:
+        if _children_this_run[parent] == MAX_CHILDREN_PER_RUN:
+            warn(f"{label(parent)} から起こした子が {MAX_CHILDREN_PER_RUN} を超えた → 分配ボットと判定、以後この親からは子を起こさない（wallets.json の no_children）")
+            wallets[parent]["no_children"] = True
+        _children_this_run[parent] += 1; return False
+    _children_this_run[parent] += 1
     wallets[cp] = {"role": child_role(wallets[parent]["role"]), "parent": parent, "first_seen": first_seen, "chains": [chain]}
-    queue.append(cp); log(f"  🆕 監視追加 {wallets[cp]['role']} {cp} (親 {short(parent)}, {chain})")
+    queue.append(cp); log(f"  🆕 監視追加 {wallets[cp]['role']} {cp} (親 {short(parent)}, {chain})"); return True
 
 def try_register(chain, parent, cp, ev, queue):
     """未知アドレスが EOA なら子として登録。判定不能なら pending に積んで次回再判定"""
+    if cp in wallets: return True                      # 同じ tx 内の複数行などで二重登録しない
     r = is_contract(chain, cp)
-    if r is False: register_child(chain, parent, cp, ev["time"], queue); return True
+    if r is False: return register_child(chain, parent, cp, ev["time"], queue)
     if r is None and not any(p["addr"] == cp for p in pending_eoa):
         pending_eoa.append({"chain": chain, "addr": cp, "parent": parent, "first_seen": ev["time"]}); warn(f"EOA判定不能 → 保留 {cp}")
     return False
@@ -760,11 +791,25 @@ def run():
     for p in list(pending_eoa):
         if p["addr"] in wallets: pending_eoa.remove(p); continue
         r = is_contract(p["chain"], p["addr"])
-        if r is False: register_child(p["chain"], p["parent"], p["addr"], p["first_seen"], queue); pending_eoa.remove(p)
+        if r is False:
+            if register_child(p["chain"], p["parent"], p["addr"], p["first_seen"], queue): pending_eoa.remove(p)
         elif r is True: pending_eoa.remove(p)
+    if not snapshots and not DRY_RUN and over_budget() is False:
+        first_h = {}
+        for w in list(wallets):
+            for ch in active:
+                if not addr_fits(ch, w) or (ch not in wallets[w]["chains"] and wallets[w]["role"] != "本体"): continue
+                h = fetch_holdings(ch, w); prefetch_prices(ch, [v["contract"] for v in h.values() if not v.get("price")])
+                for s_, v in h.items():
+                    v["price"] = v["price"] or price(ch, v["symbol"], v["contract"]); v["usd"] = v["amount"] * v["price"] if v["price"] else None
+                first_h[f"{ch}:{w}"] = h
+        doc0 = {"version": 2, "updated": datetime.now(timezone.utc).isoformat(), "holdings": first_h}
+        snapshots.append(P.build_snapshot(doc0, CTX)); json.dump(doc0, open(DATA / "holdings.json", "w"), indent=2, ensure_ascii=False)
+        log(f"初回: 残高を先に取得（総資産 {P.fmt_usd(snapshots[-1]['total'])}）")
     processed = set()
     poll = [ch for ch in active if ch in PRIMARY_CHAINS or state["run_count"] % SECONDARY_EVERY == 0]
     log("今回取得するチェーン:", poll)
+    if "solana" in poll and HELIUS_KEY: hl_prefetch([w for w in wallets if addr_fits("solana", w)])
     while queue:
         w = queue.pop(0)
         if w in processed: continue
@@ -793,12 +838,15 @@ def run():
                               cp=cp, cp_label=label(cp) if cp else "")
                     if d == "IN" and usd is not None and usd < DUST_USD and not is_watched(cp):
                         ev["kind"] = "ダスト"
-                    if d == "IN" and not r["native"] and not is_watched(cp) and not is_service(cp) and (not r["token"].isascii() or usd is None and r["token"].upper() in ("BNB", "ETH", "WBNB", "WETH", "USDT", "USDC")):
-                        ev["kind"] = "ダスト"     # 偽ネイティブ/偽ステーブルのばら撒き（アドレスポイズニング）
+                    fake_sym = r["token"].upper() in ("BNB", "ETH", "SOL", "WBNB", "WETH", "WSOL", "USDT", "USDC") and (ch, L(r["contract"])) not in KNOWN_STABLES and L(r["contract"]) != L(CHAINS[ch].get("wnative") or "")
+                    if not r["native"] and not is_watched(cp) and fake_sym:
+                        ev["kind"] = "ダスト"     # 本物以外のコントラクトで USDC/SOL 等を名乗る＝偽トークン
+                    elif d == "IN" and not r["native"] and not is_watched(cp) and not is_service(cp) and not r["token"].isascii():
+                        ev["kind"] = "ダスト"     # 非ASCIIシンボルのばら撒き（アドレスポイズニング）
                     if d == "IN" and is_lookalike(cp): ev["kind"] = "ダスト"; ev["cp_label"] = f"なりすまし {short(cp)}"
                     # 新ウォレット検出: 未知EOAへのガス種銭 or 単純トークン送金（スワップは分類段階で除外済み）
                     if ev["kind"] == "外部へ送金" and cp and d == "OUT" and (now_ts - r["ts"]) < CHILD_MAX_AGE_D * 86400 and not is_burn(cp) and not is_lookalike(cp):
-                        seed = r["native"] and (usd or 0) < GAS_SEED_USD
+                        seed = r["native"] and (usd or 0) < GAS_SEED_USD and r["amount"] >= MIN_SEED_NATIVE.get(ch, MIN_SEED_NATIVE["default"])
                         if seed or not r["native"]:
                             if try_register(ch, w, cp, ev, queue):
                                 ev["kind"] = "新ウォレット開設(ガス種銭)" if seed else "内部移動"; ev["cp_label"] = label(cp)
@@ -840,6 +888,13 @@ def run():
         json.dump(cursor, open(DATA / "cursor.json", "w"), indent=2)
         json.dump(state, open(DATA / "state.json", "w"), indent=2)
         json.dump(pending_eoa, open(DATA / "pending_eoa.json", "w"), indent=2)
+        keep_days = float(CFG.get("events_keep_days", 45)); cut = time.time() - keep_days * 86400
+        old_ev = [e for e in events if e["ts"] < cut]
+        if old_ev:
+            (DATA / "archive").mkdir(exist_ok=True)
+            with open(DATA / "archive" / "events_old.jsonl", "a") as f:
+                for e in sorted(old_ev, key=lambda e: e["ts"]): f.write(json.dumps(e, ensure_ascii=False) + "\n")
+            events[:] = [e for e in events if e["ts"] >= cut]
         with open(DATA / "events.jsonl", "w") as f:
             for e in sorted(events, key=lambda e: e["ts"]): f.write(json.dumps(e, ensure_ascii=False) + "\n")
         json.dump(holdings_doc, open(DATA / "holdings.json", "w"), indent=2, ensure_ascii=False)
