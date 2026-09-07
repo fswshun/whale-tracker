@@ -336,3 +336,24 @@ def new_positions_text(rows, names, max_items=8):
         sold = f"、{g['sold_pct']:.0f}%売却済" if g["sold_pct"] >= 1 else ""
         L.append(f"  {g['sym']} {pnl}（{who} 支払 {fmt_usd(g['cost'])}、平均 ${g['avg']:.4g} → いま ${g['px']:.4g}{sold}）" if g["px"] else f"  {g['sym']} 価格取得不可（支払 {fmt_usd(g['cost'])}）")
     return "\n".join(L)
+
+
+# ------------------------------------------------------------ 銘柄別の日次推移（前日比 と 開始日比 の両方）
+def token_matrix(snaps, ctx, top_n=20, extra_keys=(), n_points=45):
+    """時点ごとの 枚数/単価/評価額 を銘柄別に並べる。対象＝現在の評価額上位 top_n のリスク銘柄 ＋ extra_keys（新規購入銘柄など）"""
+    pts = cutoff_points(snaps, n=n_points)
+    if not pts: return {"points": [], "rows": [], "totals": []}
+    now = pts[-1]["snap"]
+    top = sorted([k for k, p in now["pos"].items() if p["b"] == "risk"], key=lambda k: -now["pos"][k]["usd"])[:top_n]
+    keys = list(dict.fromkeys(top + [k for k in extra_keys if k not in top]))
+    rows = []
+    for k in keys:
+        cells = []
+        for p in pts:
+            q = p["snap"]["pos"].get(k)
+            cells.append({"amt": q["amt"], "px": q.get("px"), "usd": q["usd"]} if q else None)
+        sym = next((c["sym"] for c in [p["snap"]["pos"].get(k) for p in pts] if c), k)
+        rows.append({"key": k, "sym": sym, "chain": k.split(":")[0], "contract": k.split(":")[1], "cells": cells, "now_usd": (now["pos"].get(k) or {}).get("usd", 0.0)})
+    rows.sort(key=lambda r: -r["now_usd"])
+    totals = [{"total": p["snap"]["total"], "risk": p["snap"]["risk"]} for p in pts]
+    return {"points": [{"label": p["label"], "ts": p["ts"], "approx": bool(p["snap"].get("approx"))} for p in pts], "rows": rows, "totals": totals}

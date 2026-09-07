@@ -96,7 +96,8 @@ function show(ev){var pt=svg.createSVGPoint();pt.x=ev.clientX;pt.y=ev.clientY;va
 xh.setAttribute('x1',q.x);xh.setAttribute('x2',q.x);xh.style.display='';tip.textContent='';var h=document.createElement('div');h.className='sub';h.textContent=q.label;tip.appendChild(h);tip.appendChild(row('#2a78d6','総資産',q.total));tip.appendChild(row('#eb6834','リスク資産',q.risk));var s=document.createElement('div');s.className='sub';s.textContent='準現金 '+fmt(q.quasi)+' / 現金 '+fmt(q.cash);tip.appendChild(s);
 var box=svg.getBoundingClientRect();var sx=box.width/720;var left=q.x*sx+12;if(left+180>box.width)left=q.x*sx-190;tip.style.left=left+'px';tip.style.top=(p.y*sx-10)+'px';tip.style.display='block';}
 hit.addEventListener('pointermove',show);hit.addEventListener('pointerleave',function(){xh.style.display='none';tip.style.display='none';});})();
-(function(){var tabs=document.querySelectorAll('.tab');tabs.forEach(function(t){t.addEventListener('click',function(){tabs.forEach(function(u){u.setAttribute('aria-selected','false');});t.setAttribute('aria-selected','true');document.querySelectorAll('.day').forEach(function(dv){dv.hidden=(dv.id!==t.dataset.target);});});});})();
+(function(){var tabs=document.querySelectorAll('.tab:not(.mtab)');tabs.forEach(function(t){t.addEventListener('click',function(){tabs.forEach(function(u){u.setAttribute('aria-selected','false');});t.setAttribute('aria-selected','true');document.querySelectorAll('.day').forEach(function(dv){dv.hidden=(dv.id!==t.dataset.target);});});});
+var mt=document.querySelectorAll('.mtab');mt.forEach(function(t){t.addEventListener('click',function(){mt.forEach(function(u){u.setAttribute('aria-selected','false');});t.setAttribute('aria-selected','true');document.querySelectorAll('.mode').forEach(function(dv){dv.hidden=(dv.id!==t.dataset.target);});});});})();
 """
 
 # ------------------------------------------------------------ 日ごとの増減パネル
@@ -209,6 +210,45 @@ def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label,
                        "<div class='sub'>平均取得＝支払った ETH/BNB の時価 ÷ 受け取った枚数（スリッページ込みの実質単価）。損益＝いまの価格 ÷ 平均取得 − 1。既存の大型銘柄（PONS 等）の推移は上のタブへ。</div></section>")
     else:
         newpos_html = ""
+    # --- 銘柄別の日次推移（前日比 + 開始日比） ---
+    mx = tl.get("matrix") or {}
+    matrix_html = ""
+    if mx.get("points") and len(mx["points"]) >= 2:
+        P_ = mx["points"]; n = len(P_)
+        def pct(a, b): return ((a / b - 1) * 100) if (a is not None and b) else None
+        def dtxt(v, unit=""):   # 差分（$ or 枚）
+            if v is None: return "—"
+            return P.fmt_usd(v, True) if unit == "$" else (("+" if v > 0 else "") + (P.fmt_qty(v) if abs(v) >= 1000 else f"{v:,.4g}"))
+        def sub(dprev, dstart):
+            a = f"前日 <span class='{cls_delta(dprev or 0)}'>{P.fmt_pct(dprev)}</span>" if dprev is not None else "前日 —"
+            b = f"累計 <span class='{cls_delta(dstart or 0)}'>{P.fmt_pct(dstart)}</span>" if dstart is not None else "累計 —"
+            return f"<div class='sub'>{a} · {b}</div>"
+        def table(mode):
+            head = "".join(f"<th class='r'>{esc(pt['label'])}{' <span class=mute>推定</span>' if pt['approx'] else ''}</th>" for pt in P_)
+            body = ""
+            if mode == "usd":
+                for name, key in (("総資産", "total"), ("リスク資産", "risk")):
+                    vals = [tt[key] for tt in mx["totals"]]
+                    cells = "".join(f"<td class='r'><b>{P.fmt_usd(v)}</b>{sub(pct(v, vals[i-1]) if i else None, pct(v, vals[0]) if i else None)}</td>" for i, v in enumerate(vals))
+                    body += f"<tr><td><b>{name}</b></td>{cells}</tr>"
+            for r in mx["rows"]:
+                cells = ""; first = next((c for c in r["cells"] if c), None)
+                for i, c in enumerate(r["cells"]):
+                    if not c: cells += "<td class='r mute'>—</td>"; continue
+                    prev = next((r["cells"][j] for j in range(i - 1, -1, -1) if r["cells"][j]), None) if i else None
+                    if mode == "usd":
+                        v = c["usd"]; cells += f"<td class='r'>{P.fmt_usd(v)}{sub(pct(v, prev['usd']) if prev else None, pct(v, first['usd']) if (first and first is not c) else None)}</td>"
+                    elif mode == "px":
+                        v = c.get("px"); cells += (f"<td class='r'>${v:.4g}{sub(pct(v, prev.get('px')) if prev else None, pct(v, first.get('px')) if (first and first is not c) else None)}</td>" if v else "<td class='r mute'>—</td>")
+                    else:
+                        v = c["amt"]; d1 = (v - prev["amt"]) if prev else None; d0 = (v - first["amt"]) if (first and first is not c) else None
+                        cells += f"<td class='r'>{esc(P.fmt_qty(v))}<div class='sub'>前日 {esc(dtxt(d1))} · 累計 {esc(dtxt(d0))}</div></td>"
+                body += f"<tr><td>{esc(r['sym'])}<span class='tag'>{esc(P.chain_name(r['chain'], ctx))}</span></td>{cells}</tr>"
+            return f"<div class='mode' id='mode-{mode}'{'' if mode == 'usd' else ' hidden'} style='overflow-x:auto'><table><thead><tr><th>銘柄</th>{head}</tr></thead><tbody>{body}</tbody></table></div>"
+        matrix_html = ("<section class='panel'><h2>銘柄別の日次推移（各セルに 前日比 と 開始日からの累計 を表示。毎日 9:00 JST 時点）</h2>"
+                       "<div class='tabs'><button class='tab mtab' data-target='mode-usd' aria-selected='true'>評価額</button><button class='tab mtab' data-target='mode-px' aria-selected='false'>単価</button><button class='tab mtab' data-target='mode-amt' aria-selected='false'>枚数</button></div>"
+                       + table("usd") + table("px") + table("amt")
+                       + f"<div class='sub'>対象＝現在の評価額上位 {len([r for r in mx['rows']])} 銘柄＋直近14日の新規購入銘柄。「推定」の列は記録開始前を取引から逆算したもので単価は 9/6 朝の値。累計の起点は {esc(P_[0]['label'])}。</div></section>")
     # --- 現在のポジション（クラスター合算、上位） ---
     pos_rows = ""
     if cur:
@@ -246,5 +286,5 @@ def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label,
 <title>クジラ資産レポート</title><style>{CSS}</style></head><body>
 <header><h1>クジラ資産レポート <small>本体 {sum(1 for w in wallets if wallets[w]['role'] == '本体')} ＋ 自動検出 {sum(1 for w in wallets if wallets[w]['role'] != '本体')} ウォレット</small></h1>
 <div class="sub">更新 {P.jst(int(now.timestamp())).strftime('%m-%d %H:%M')} JST（15分ごと）</div></header>
-<main>{hero}{newpos_html}{chart}{days}{pos_rows}{rules}{old}</main><script>{CHART_JS}</script></body></html>"""
+<main>{hero}{newpos_html}{chart}{matrix_html}{days}{pos_rows}{rules}{old}</main><script>{CHART_JS}</script></body></html>"""
     out_path.write_text(doc, encoding="utf-8")
