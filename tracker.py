@@ -830,6 +830,7 @@ def classify_tx(chain, owner, trs):
     return kind, outs, ins, cp
 
 _age_probe = set()
+def fmt_usd_(v): return P.fmt_usd(v)
 def resolve_purchases(evs):
     """相手先からの受取に対し、全チェーン横断で「同じ相手へ原資を払ったか」を後付けで判定。
        ラベル付きサービスだけでなく、7日以内にクラスターが $500 以上を払った相手（クロスチェーン執行ウォレット等）からの受取も購入扱い"""
@@ -853,6 +854,9 @@ def resolve_purchases(evs):
         if c is None and e["ts"] >= time.time() - 3 * 86400 and len(_age_probe) < 40 and e["contract"] not in _age_probe:
             _age_probe.add(e["contract"]); price(e["chain"], e["token"], e["contract"]); c = pair_created(e["chain"], e["contract"])
         if c is not None and 0 <= e["ts"] - c < NEW_TOKEN_H * 3600:
+            recent = sum((p.get("usd") or 0) for p in pays.get(e["cp"], []) if 0 <= e["ts"] - p["ts"] <= 2 * 3600)
+            if recent >= 0.5 * (e.get("usd") or 0) and recent > 0:
+                e["note"] = f"上場 {(e['ts'] - c) / 3600:.1f} 時間後だが直前2時間に {fmt_usd_(recent)} を支払済み → 購入として扱う"; continue
             e["kind"] = "受取(新規トークン)"; e["note"] = f"上場 {(e['ts'] - c) / 3600:.1f} 時間後の少額受取（エアドロップ疑い）"
 
 # ------------------------------------------------------------ 子ウォレット登録
@@ -1102,11 +1106,15 @@ def cross_whale_alert(pages):
     me = WHALE_NAME or "本体"
     cut = time.time() - 2 * 86400
     groups = defaultdict(dict)     # (date, chain, contract) -> whale -> {usd, amount, last, sym, who}
+    deliveries = defaultdict(list) # (chain, contract, cp) -> [(whale, ts, usd)]  同じ送り主から複数クジラへの配布（エアドロップ）検出用
     def add(name, evs, names):
         for a in P.group_trades([e for e in evs if e["ts"] >= cut], "buy", CTX, CROSS_MIN_USD):
             key = (P.jst(a["last"]).strftime("%Y-%m-%d"), a["chain"], a["contract"])
             g = groups[key].setdefault(name, {"usd": 0.0, "amount": 0.0, "last": 0, "sym": a["sym"], "who": set()})
             g["usd"] += a["value"]; g["amount"] += a["amount"]; g["last"] = max(g["last"], a["last"]); g["who"].add(names.get(a["wallet"], "?"))
+        for e in evs:
+            if e["ts"] >= cut and e["dir"] == "IN" and e["kind"] in ("購入(クロスチェーン)", "受取(原資未確認)", "受取(新規トークン)"):
+                deliveries[(e["chain"], L(e["contract"]), e["cp"])].append((name, e["ts"], e.get("usd") or 0))
     add(me, events, P.role_names(wallets))
     for repo in PEER_REPOS:
         if repo.endswith("/" + (ROOT.name if ROOT.name.startswith("whale-") else "whale-tracker")): continue
@@ -1118,8 +1126,15 @@ def cross_whale_alert(pages):
         except Exception as e:
             warn(f"同時買い検出: {repo} の読み込み失敗 {e!r}")
     alerted = set(tuple(x) for x in state.get("cross_alerted", []))
+    airdrop_like = set()
+    for (chain, contract, cp), lst in deliveries.items():
+        whales = sorted(set(n for n, _, _ in lst))
+        if len(whales) >= 2:
+            ts = sorted(t for _, t, _ in lst)
+            if ts[-1] - ts[0] <= 1800 and max(u for _, _, u in lst) < NEW_TOKEN_MAX_USD: airdrop_like.add((chain, contract))
     for (date, chain, contract), by in groups.items():
         if len(by) < 2: continue
+        if (chain, contract) in airdrop_like: log(f"同時買い: {next(iter(by.values()))['sym']} は同じ送り主から複数クジラへ30分以内に少額配布 → エアドロップ扱いで除外"); continue
         latest = max(by, key=lambda n: by[n]["last"])
         if latest != me: continue
         key = (date, chain, contract, len(by))
