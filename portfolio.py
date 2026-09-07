@@ -287,3 +287,52 @@ def digest_text(br, names, ctx, title, pages="", max_items=4):
         L.append("↔ 内部移動: " + "、".join(f"{names.get(e['wallet'], '?')}→{names.get(e['cp'], '外')} {e['token']} {fmt_qty(e['amount'])}" for e in br["internal"][:3]))
     if pages and "<" not in pages: L.append(f"詳細: {pages}")
     return "\n".join(L)
+
+
+# ------------------------------------------------------------ 新規購入銘柄の成績（別出し）
+def new_positions(events, snaps, ctx, days=14, min_cost=1000.0):
+    """直近 days 日に買ったリスク銘柄ごとの成績。平均取得単価（支払額÷枚数）と現在価格の比較、売却済み分、時点ごとの価格推移"""
+    if not snaps: return []
+    now = snaps[-1]; since = now["ts"] - days * DAY
+    evs = [e for e in events if e["ts"] > since]
+    buys = group_trades(evs, "buy", ctx); sells = group_trades(evs, "sell", ctx)
+    agg = {}
+    for a in buys:
+        k = f"{a['chain']}:{a['contract']}"
+        g = agg.setdefault(k, {"key": k, "chain": a["chain"], "contract": a["contract"], "sym": a["sym"], "qty": 0.0, "cost": 0.0, "n": 0,
+                               "first": a["first"], "last": a["last"], "wallets": set(), "sold_qty": 0.0, "proceeds": 0.0})
+        g["qty"] += a["amount"]; g["cost"] += a["value"]; g["n"] += a["n"]; g["wallets"].add(a["wallet"])
+        g["first"] = min(g["first"], a["first"]); g["last"] = max(g["last"], a["last"])
+    for a in sells:
+        k = f"{a['chain']}:{a['contract']}"
+        if k in agg and a["last"] >= agg[k]["first"]: agg[k]["sold_qty"] += a["amount"]; agg[k]["proceeds"] += a["value"]
+    pts = cutoff_points(snaps, n=60); quote = ctx.get("quote")
+    out = []
+    for k, g in agg.items():
+        if g["cost"] < min_cost or g["qty"] <= 0: continue
+        g["avg"] = g["cost"] / g["qty"]
+        cur = now["pos"].get(k); px = cur["px"] if cur and cur.get("px") else None
+        liq = None
+        if quote:
+            qpx, qliq = quote(g["chain"], g["contract"]); px = px or qpx; liq = qliq
+        g["px"] = px; g["liq"] = liq
+        g["held"] = cur["amt"] if cur else 0.0; g["value"] = g["held"] * px if px else None
+        g["pnl_pct"] = (px / g["avg"] - 1) * 100 if px and g["avg"] else None
+        g["sold_pct"] = min(g["sold_qty"] / g["qty"] * 100, 100) if g["qty"] else 0.0
+        # 買ってからの時点ごとの価格
+        path = [(p["label"], p["snap"]["pos"].get(k, {}).get("px")) for p in pts if p["ts"] >= g["first"] - 1800]
+        g["path"] = [(l, v) for l, v in path if v]
+        prev = next((v for l, v in reversed(g["path"][:-1]) if v), None) if len(g["path"]) >= 2 else None
+        g["vs_prev_pct"] = (px / prev - 1) * 100 if px and prev else None
+        g["wallets"] = sorted(g["wallets"]); out.append(g)
+    return sorted(out, key=lambda g: -g["cost"])
+
+def new_positions_text(rows, names, max_items=8):
+    if not rows: return ""
+    L = ["🆕 新規銘柄の成績（直近14日に買った銘柄、平均取得比）:"]
+    for g in rows[:max_items]:
+        who = "/".join(names.get(w, "?") for w in g["wallets"])
+        pnl = fmt_pct(g["pnl_pct"]) if g["pnl_pct"] is not None else "価格なし"
+        sold = f"、{g['sold_pct']:.0f}%売却済" if g["sold_pct"] >= 1 else ""
+        L.append(f"  {g['sym']} {pnl}（{who} 支払 {fmt_usd(g['cost'])}、平均 ${g['avg']:.4g} → いま ${g['px']:.4g}{sold}）" if g["px"] else f"  {g['sym']} 価格取得不可（支払 {fmt_usd(g['cost'])}）")
+    return "\n".join(L)

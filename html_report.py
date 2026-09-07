@@ -187,6 +187,28 @@ def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label,
         days = f"<section class='panel'><h2>時点ごとの増減（値動き / 利確 / 買い に分解）</h2><div class='tabs'>{tabs}</div>{panels}</section>"
     else:
         days = "<section class='panel'><h2>時点ごとの増減</h2><div class='sub'>明日 9:00 JST の時点から、前日比の分解（値動き / 利確 / 買い）を表示します。</div></section>"
+    # --- 新規購入銘柄の成績（別出し） ---
+    newpos = tl.get("new_positions") or []
+    if newpos:
+        def nrow(g):
+            who = "/".join(esc(names.get(w, "?")) for w in g["wallets"]); link = P.dex_link(g["chain"], g["contract"], ctx)
+            pnl = f"<span class='{cls_delta(g['pnl_pct'])}'>{P.fmt_pct(g['pnl_pct'])}</span>" if g["pnl_pct"] is not None else "<span class='mute'>—</span>"
+            vs = f"<span class='{cls_delta(g['vs_prev_pct'])}'>{P.fmt_pct(g['vs_prev_pct'])}</span>" if g["vs_prev_pct"] is not None else "<span class='mute'>—</span>"
+            path = " → ".join(f"{esc(l)} ${v:.4g}" for l, v in g["path"][-4:]) if g["path"] else ""
+            sold = f"<div class='sub'>{g['sold_pct']:.0f}% 売却済（{usd(g['proceeds'])}）</div>" if g["sold_pct"] >= 1 else ""
+            return (f"<tr class='buy'><td>{esc(g['sym'])}<span class='tag'>{esc(P.chain_name(g['chain'], ctx))}</span><div class='sub'>{who}</div></td>"
+                    f"<td>{jst(g['first'])}<div class='sub'>{g['n']}回、最終 {jst(g['last'])[6:]}</div></td>"
+                    f"<td class='r'>{esc(P.fmt_qty(g['qty']))}<div class='sub'>{usd(g['cost'])}</div></td>"
+                    f"<td class='r'>${g['avg']:.4g}</td><td class='r'>{('$%.4g' % g['px']) if g['px'] else '—'}</td><td class='r'>{pnl}</td><td class='r'>{vs}</td>"
+                    f"<td class='r'>{esc(P.fmt_qty(g['held']))}<div class='sub'>{usd(g['value'])}</div>{sold}</td>"
+                    f"<td class='r'>{P.fmt_usd(g['liq']) if g['liq'] else '—'}</td><td class='w sub'>{path}</td>"
+                    f"<td>{('<a href=' + chr(39) + esc(link) + chr(39) + ' target=_blank rel=noopener>DexScreener</a>') if link else ''}</td></tr>")
+        newpos_html = ("<section class='panel'><h2>🆕 新規購入銘柄の成績（直近14日に買った銘柄・支払 $1,000 以上・平均取得単価に対する現在の損益）</h2><div style='overflow-x:auto'>"
+                       "<table><thead><tr><th>銘柄 / 買い手</th><th>初回買い(JST)</th><th class='r'>買った枚数 / 支払額</th><th class='r'>平均取得</th><th class='r'>いま</th><th class='r'>損益</th><th class='r'>前時点比</th><th class='r'>現在保有 / 評価</th><th class='r'>流動性</th><th>買ってからの価格</th><th></th></tr></thead><tbody>"
+                       + "".join(nrow(g) for g in newpos[:30]) + "</tbody></table></div>"
+                       "<div class='sub'>平均取得＝支払った ETH/BNB の時価 ÷ 受け取った枚数（スリッページ込みの実質単価）。損益＝いまの価格 ÷ 平均取得 − 1。既存の大型銘柄（PONS 等）の推移は上のタブへ。</div></section>")
+    else:
+        newpos_html = ""
     # --- 現在のポジション（クラスター合算、上位） ---
     pos_rows = ""
     if cur:
@@ -224,5 +246,5 @@ def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label,
 <title>クジラ資産レポート</title><style>{CSS}</style></head><body>
 <header><h1>クジラ資産レポート <small>本体 {sum(1 for w in wallets if wallets[w]['role'] == '本体')} ＋ 自動検出 {sum(1 for w in wallets if wallets[w]['role'] != '本体')} ウォレット</small></h1>
 <div class="sub">更新 {P.jst(int(now.timestamp())).strftime('%m-%d %H:%M')} JST（15分ごと）</div></header>
-<main>{hero}{chart}{days}{pos_rows}{rules}{old}</main><script>{CHART_JS}</script></body></html>"""
+<main>{hero}{newpos_html}{chart}{days}{pos_rows}{rules}{old}</main><script>{CHART_JS}</script></body></html>"""
     out_path.write_text(doc, encoding="utf-8")

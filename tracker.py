@@ -746,7 +746,9 @@ def notify(new_events, holdings):
         pts = P.cutoff_points(snapshots)
         if len(pts) >= 2:
             br = P.bridge(pts[-2], pts[-1], events, CTX, MOVE_MIN_USD)
-            tg(P.digest_text(br, names, CTX, f"📊 日次レポート {P.jst(pts[-1]['ts']).strftime('%m/%d %H:%M')} JST（{pts[-2]['label']} → {pts[-1]['label']}）", pages))
+            body = P.digest_text(br, names, CTX, f"📊 日次レポート {P.jst(pts[-1]['ts']).strftime('%m/%d %H:%M')} JST（{pts[-2]['label']} → {pts[-1]['label']}）", "")
+            npt = P.new_positions_text(P.new_positions(events, snapshots, CTX, days=int(CFG.get("new_positions_days", 14)), min_cost=float(CFG.get("buy_list_min_usd", 1000))), names)
+            tg(body + ("\n" + npt if npt else "") + (f"\n詳細: {pages}" if pages and "<" not in pages else ""))
         else:
             tg(f"📊 日次レポート: 記録開始。明日 9:00 JST から前日比（値動き / 利確 / 買い）を送ります。現在の総資産 {P.fmt_usd(snapshots[-1]['total']) if snapshots else '—'}")
         state["last_daily"] = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -769,7 +771,12 @@ def html(holdings_doc):
     out = DOCS / ("index.dryrun.html" if DRY_RUN else "index.html")
     pts = P.cutoff_points(snapshots, n=45)
     bridges = [P.bridge(pts[i - 1], pts[i], events, CTX, MOVE_MIN_USD) for i in range(1, len(pts))]
-    timeline = {"points": pts, "bridges": bridges, "names": P.role_names(wallets), "ctx": CTX, "min_usd": MOVE_MIN_USD, "buy_list_min_usd": float(CFG.get("buy_list_min_usd", 1000))}
+    newpos = P.new_positions(events, snapshots, CTX, days=int(CFG.get("new_positions_days", 14)), min_cost=float(CFG.get("buy_list_min_usd", 1000)))
+    for g in newpos:   # 現在価格が無い銘柄は DexScreener で補う
+        if not g["px"]:
+            g["px"] = price(g["chain"], g["sym"], g["contract"]); g["liq"] = _liq.get((g["chain"], g["contract"]))
+            if g["px"]: g["pnl_pct"] = (g["px"] / g["avg"] - 1) * 100; g["value"] = g["held"] * g["px"]
+    timeline = {"points": pts, "bridges": bridges, "names": P.role_names(wallets), "ctx": CTX, "min_usd": MOVE_MIN_USD, "buy_list_min_usd": float(CFG.get("buy_list_min_usd", 1000)), "new_positions": newpos}
     render(CFG, CHAINS, wallets, events, hd, batches(events), THRESHOLD, label, out, holdings_updated=upd, timeline=timeline)
     log("HTML 生成:", out)
 
