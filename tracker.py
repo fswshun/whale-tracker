@@ -743,14 +743,17 @@ def run():
     state["run_count"] = state.get("run_count", 0) + 1
     # 初回チェーン探索（NodeReal キー無しなら BSC 抜きで探索し、結果は保存しない）
     active = list(CFG.get("chains") or [])
-    if not active:
-        for ch in CHAINS:
-            if not chain_available(ch): warn(f"{ch}: キー未設定のため探索スキップ"); continue
-            if any(has_activity(ch, a) for a in CFG["main_wallets"] if addr_fits(ch, a)): active.append(ch)
+    checked = set(CFG.get("chains_checked") or ([ch for ch in CHAINS if chain_available(ch)] if active else []))
+    changed = False
+    for ch in CHAINS:      # 未探索 かつ キーがあるチェーンだけ探索（キーが後から追加された場合もここで拾う）
+        if ch in checked or ch in active: continue
+        if not chain_available(ch): continue
+        if any(has_activity(ch, a) for a in CFG["main_wallets"] if addr_fits(ch, a)): active.append(ch)
+        checked.add(ch); changed = True
+    if changed:
         log("活動のあるチェーン:", active)
-        if all(chain_available(ch) for ch in CHAINS):
-            CFG["chains"] = active
-            if not DRY_RUN: json.dump(CFG, open(ROOT / "config.json", "w"), indent=2, ensure_ascii=False)
+        CFG["chains"] = active; CFG["chains_checked"] = sorted(checked)
+        if not DRY_RUN: json.dump(CFG, open(ROOT / "config.json", "w"), indent=2, ensure_ascii=False)
     active = [ch for ch in active if chain_available(ch)]
     # 保留中の EOA 判定を再試行
     queue = list(wallets.keys())
