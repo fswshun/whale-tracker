@@ -41,5 +41,10 @@ jobs:
           git add data docs config.json
           if git diff --cached --quiet; then echo "変更なし"; exit 0; fi
           git commit -m "track $(date -u +'%Y-%m-%d %H:%M')"
-          git pull --rebase origin "$GITHUB_REF_NAME" || true
-          git push
+          # 並走した実行のコミットと衝突したら、こちら（新しい方）を優先して載せ直す。それでも駄目なら今回分は捨てて次回に任せる
+          if ! git pull --rebase -X theirs origin "$GITHUB_REF_NAME"; then
+            git rebase --abort || true
+            git fetch origin && git reset --hard "origin/$GITHUB_REF_NAME"
+            echo "衝突のため今回の保存はスキップ（次回に再取得）"; exit 0
+          fi
+          git push || { git fetch origin && git reset --hard "origin/$GITHUB_REF_NAME"; echo "push 失敗のためスキップ"; exit 0; }
