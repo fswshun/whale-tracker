@@ -470,10 +470,15 @@ def alc_holdings(chain, addr):
     h = {}
     bal = nr_rpc(chain, "eth_getBalance", [addr, "latest"])
     if bal is not None: h["native"] = {"symbol": CHAINS[chain]["native"], "amount": hx(bal) / 1e18, "contract": "native", "price": None}
-    res = nr_rpc(chain, "alchemy_getTokenBalances", [addr, "erc20"])
-    if not isinstance(res, dict): return h
-    items = [t for t in res.get("tokenBalances") or [] if t.get("tokenBalance") not in (None, "0x0", "0x") and not t.get("error")]
-    for t in items[:400]:
+    items, page_key = [], None
+    for _ in range(15):                                   # 100件/ページ。pageKey で続きを取る（取り漏れ防止）
+        params = [addr, "erc20"] + ([{"pageKey": page_key}] if page_key else [])
+        res = nr_rpc(chain, "alchemy_getTokenBalances", params)
+        if not isinstance(res, dict): break
+        items += [t for t in res.get("tokenBalances") or [] if t.get("tokenBalance") not in (None, "0x0", "0x") and not t.get("error")]
+        page_key = res.get("pageKey")
+        if not page_key: break
+    for t in items[:1500]:
         c = L(t.get("contractAddress") or ""); raw = hx(t.get("tokenBalance")) or 0
         if raw <= 0 or not c: continue
         meta = token_meta.get(f"{chain}:{c}")
@@ -485,8 +490,34 @@ def alc_holdings(chain, addr):
         if amt > 0: h[c] = {"symbol": meta.get("symbol") or "?", "amount": amt, "contract": c, "price": None}
     return h
 
+def evm_reconcile_by_events(chain, addr, h, limit=30):
+    """取引履歴（events）で受け取った銘柄のうち、残高一覧に無いものを balanceOf で確認して補完"""
+    seen = {}
+    for e in events:
+        if e["chain"] == chain and e["wallet"] == addr and e["dir"] == "IN" and e["contract"] != "native": seen[L(e["contract"])] = e["token"]
+    missing = [c for c in seen if c not in h]
+    if not missing: return
+    prefetch_prices(chain, missing)
+    for c in [c for c in missing if _px.get((chain, c))][:limit]:
+        res = nr_rpc(chain, "eth_call", [{"to": c, "data": "0x70a08231" + addr[2:].rjust(64, "0")}, "latest"])
+        if not (isinstance(res, str) and res.startswith("0x") and len(res) > 2): continue
+        raw = int(res, 16)
+        if raw <= 0: continue
+        meta = token_meta.get(f"{chain}:{c}")
+        if not meta:
+            m = nr_rpc(chain, "alchemy_getTokenMetadata", [c]) if use_alchemy() else None
+            meta = {"symbol": (m or {}).get("symbol") or seen[c], "decimals": (m or {}).get("decimals") if isinstance(m, dict) and m.get("decimals") is not None else 18}
+            token_meta[f"{chain}:{c}"] = meta
+        dec = int(meta.get("decimals") or 18)
+        h[c] = {"symbol": meta.get("symbol") or seen[c], "amount": raw / 10 ** dec, "contract": c, "price": _px.get((chain, c))}
+        log(f"  残高補完 {chain} {short(addr)} {h[c]['symbol']} {raw / 10 ** dec:,.4g}（一覧に無く balanceOf で確認）")
+
 def nr_holdings(chain, addr):
-    if use_alchemy(): return alc_holdings(chain, addr)
+    if use_alchemy():
+        h = alc_holdings(chain, addr)
+        try: evm_reconcile_by_events(chain, addr, h)
+        except Exception as e: warn(f"{chain} 残高補完でエラー: {e!r}")
+        return h
     h = {}
     bal = nr_rpc(chain, "eth_getBalance", [addr, "latest"])
     if bal is not None: h["native"] = {"symbol": CHAINS[chain]["native"], "amount": hx(bal) / 1e18, "contract": "native", "price": None}
@@ -502,6 +533,8 @@ def nr_holdings(chain, addr):
             if amt > 0 and c: h[c] = {"symbol": d.get("tokenSymbol") or "?", "amount": amt, "contract": c, "price": None}
         if len(det) < 100 or page * 100 >= (hx(res.get("totalCount")) or 0): break
         page += 1
+    try: evm_reconcile_by_events(chain, addr, h)
+    except Exception as e: warn(f"{chain} 残高補完でエラー: {e!r}")
     return h
 
 def nr_has_activity(chain, addr):
@@ -854,7 +887,7 @@ def run():
                 for s_, v in h.items():
                     v["price"] = v["price"] or price(ch, v["symbol"], v["contract"]); v["usd"] = v["amount"] * v["price"] if v["price"] else None
                 first_h[f"{ch}:{w}"] = h
-        doc0 = {"version": 2, "updated": datetime.now(timezone.utc).isoformat(), "holdings": first_h}
+        doc0 = {"version": 3, "updated": datetime.now(timezone.utc).isoformat(), "holdings": first_h}
         snapshots.append(P.build_snapshot(doc0, CTX)); json.dump(doc0, open(DATA / "holdings.json", "w"), indent=2, ensure_ascii=False)
         log(f"初回: 残高を先に取得（総資産 {P.fmt_usd(snapshots[-1]['total'])}）")
     processed = set()
@@ -909,7 +942,7 @@ def run():
     resolve_purchases(events)
     # 残高（HOLDINGS_EVERY 回に1回、または初回・新規ウォレット追加時）
     prev = jload(DATA / "holdings.json", {"updated": None, "holdings": {}})
-    need = state["run_count"] % HOLDINGS_EVERY == 1 or not prev["holdings"] or prev.get("version") != 2 or any(f"{ch}:{w}" not in prev["holdings"] for w in wallets for ch in active if addr_fits(ch, w) and (wallets[w]["chains"] or wallets[w]["role"] == "本体"))
+    need = state["run_count"] % HOLDINGS_EVERY == 1 or not prev["holdings"] or prev.get("version") != 3 or any(f"{ch}:{w}" not in prev["holdings"] for w in wallets for ch in active if addr_fits(ch, w) and (wallets[w]["chains"] or wallets[w]["role"] == "本体"))
     nowdt = datetime.now(timezone.utc); today = nowdt.strftime("%Y-%m-%d")
     state["daily_due"] = state.get("last_daily") != today and nowdt.hour >= DAILY_HOUR_UTC
     if state["daily_due"]: need = True                                   # 日次レポートの時点は必ず実残高で
@@ -926,7 +959,7 @@ def run():
                     v["price"] = v["price"] or price(ch, v["symbol"], v["contract"]); v["usd"] = v["amount"] * v["price"] if v["price"] else None
                 holdings[f"{ch}:{w}"] = h
                 time.sleep(0.3)
-        holdings_doc = {"version": 2, "updated": datetime.now(timezone.utc).isoformat(), "holdings": holdings}
+        holdings_doc = {"version": 3, "updated": datetime.now(timezone.utc).isoformat(), "holdings": holdings}
     else:
         holdings_doc = prev; holdings = prev["holdings"]
     state["holdings_refreshed"] = bool(need)
