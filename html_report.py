@@ -278,7 +278,7 @@ def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label,
         rows = "".join(f"<div>{esc(P.symc(x['sym'], x['chain']))} {usd(x.get('usd'))} <span class='sub'>{num(x['amount'])}枚</span></div>" for x in big[:20])
         left.append(f"<div style='margin-bottom:10px'><b>{who(w)}</b> <span class='sub'>{usd(tot)}</span><div class='sub'>{rows}</div></div>")
     evs = sorted(events, key=lambda e: e["ts"], reverse=True)
-    major = [e for e in evs if ((e.get("usd") or 0) >= threshold or e["kind"].startswith("新ウォレット")) and not e["kind"].startswith("売却")]
+    major = [e for e in evs if ((e.get("usd") or 0) >= threshold or e["kind"].startswith("新ウォレット")) and not e["kind"].startswith("売却") and e["kind"] not in P.NOISE_KINDS]
     erows = "".join(f"<tr class='{kcls(e['kind'])}'><td>{jst(e['ts'])}<span class='tag'>{chains[e['chain']]['name']}</span></td><td>{who(e['wallet'])}</td>"
                     f"<td><span class='k {kcls(e['kind'])}'>{esc(e['kind'])}</span></td><td>{e['dir']}</td><td>{esc(P.symc(e['token'], e['chain']))}</td><td class='r'>{num(e['amount'])}</td><td class='r'>{usd(e.get('usd'))}</td><td>{esc(e.get('cp_label') or '')}</td></tr>" for e in major[:200])
     brows = "".join(f"<tr class='sell'><td>{jst(int(datetime.fromisoformat(b['start']).timestamp()))} – {b['end'][11:16]}</td><td>{who(b['wallet'])}</td><td>{esc(P.symc(b['token'], b['chain']))}</td><td class='r'>{b['n']}</td><td class='r'>{num(b['amount'])}</td><td class='r'>{usd(b['usd'])}</td></tr>"
@@ -294,6 +294,6 @@ def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label,
     doc = f"""<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow"><title>{esc(tl.get("name") or "クジラ")} 資産レポート</title><style>{CSS}</style></head><body>
 <header><h1>{esc(tl.get("name") or "クジラ")} 資産レポート <small>本体 {sum(1 for w in wallets if wallets[w]['role'] == '本体')} ＋ 自動検出 {sum(1 for w in wallets if wallets[w]['role'] != '本体')} ウォレット</small></h1>
-<div class="sub">更新 {P.jst(int(now.timestamp())).strftime('%m-%d %H:%M')} JST（15分ごと）</div></header>
+<div class="sub">更新 {P.jst(int(now.timestamp())).strftime('%m-%d %H:%M')} JST（10分ごと）</div></header>
 <main>{hero}{chart}{matrix_html}{days}{pos_rows}{newpos_html}{rules}{old}</main><script>{CHART_JS}</script></body></html>"""
     out_path.write_text(doc, encoding="utf-8")

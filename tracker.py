@@ -847,8 +847,10 @@ def resolve_purchases(evs):
             e["funding_note"] = "、".join(f"{p['time'][5:16]} {p['amount']:.4g} {p['token']}" for p in paid[:3])
         elif e["kind"] != "受取" or is_service(e["cp"]):
             e["kind"] = "受取(原資未確認)"
-    # 上場直後（NEW_TOKEN_H 以内）の銘柄を執行サービスから少額受け取ったものは、クジラへの宣伝エアドロップの疑い → 買いに数えない
-    cands = [e for e in evs if e["kind"] in ("購入(クロスチェーン)", "受取(原資未確認)") and e["contract"] != "native" and (e.get("usd") or 0) < NEW_TOKEN_MAX_USD]
+    # 上場直後（NEW_TOKEN_H 以内）の銘柄を執行サービスから少額受け取ったもの、または本人が何も払っていない相手から素で受け取ったものは、
+    # クジラへの宣伝エアドロップの疑い → 買いに数えない（XXX / stonkscat 等: 同じ送り主が複数クジラへ同額を連投するパターン）
+    cands = [e for e in evs if e["kind"] in ("購入(クロスチェーン)", "受取(原資未確認)", "受取") and e["contract"] != "native" and (e.get("usd") or 0) < NEW_TOKEN_MAX_USD
+             and e["dir"] == "IN" and not is_watched(e["cp"]) and (e["kind"] != "受取" or (e.get("usd") or 0) >= DUST_USD)]   # 素の受取は価格付き・ダスト超のみ（DexScreener 問い合わせ枠の節約）
     for e in sorted(cands, key=lambda e: -e["ts"]):          # 新しいものから上場時刻を確認（DexScreener 呼び出しは最大 40 銘柄/回）
         c = pair_created(e["chain"], e["contract"])
         if c is None and e["ts"] >= time.time() - 3 * 86400 and len(_age_probe) < 40 and e["contract"] not in _age_probe:
@@ -858,6 +860,36 @@ def resolve_purchases(evs):
             if recent >= 0.5 * (e.get("usd") or 0) and recent > 0:
                 e["note"] = f"上場 {(e['ts'] - c) / 3600:.1f} 時間後だが直前2時間に {fmt_usd_(recent)} を支払済み → 購入として扱う"; continue
             e["kind"] = "受取(新規トークン)"; e["note"] = f"上場 {(e['ts'] - c) / 3600:.1f} 時間後の少額受取（エアドロップ疑い）"
+
+PHANTOM_CHECK_USD = float(CFG.get("phantom_check_usd", 1000))   # この額以上の「受取」は balanceOf で実在を確認する
+def balance_of(chain, contract, addr):
+    """ERC-20 balanceOf（生の整数）。Blockscout 系は PRO json-rpc → 公開 RPC、BSC は NodeReal/Alchemy。失敗は None"""
+    if provider(chain) == "blockscout": return rpc_balance_of(chain, contract, addr)
+    if provider(chain) == "nodereal":
+        res = nr_rpc(chain, "eth_call", [{"to": contract, "data": "0x70a08231" + addr[2:].rjust(64, "0")}, "latest"])
+        if isinstance(res, str) and res.startswith("0x") and len(res) > 2:
+            try: return int(res, 16)
+            except ValueError: return None
+    return None
+
+def verify_phantom_receipts(new_evs):
+    """本人が払っていない相手からの大きめのトークン受取が、実際の残高に反映されているかを balanceOf で確認する。
+       Transfer イベントだけ発行して残高を動かさない偽トークン（幻の送金: XXX / stonkscat 等、$12k 相当が数分おきに複数クジラへ届く）は
+       「なりすまし(偽送金)」に落とし、台帳・流入・同時買いのどれにも数えない。1グループ1回の eth_call なので無料枠への影響は小さい"""
+    groups = defaultdict(list)
+    for e in new_evs:
+        if (e["dir"] == "IN" and e["kind"] in ("受取", "受取(新規トークン)") and e["contract"] != "native" and e["chain"] != "solana"
+                and (e.get("usd") or 0) >= PHANTOM_CHECK_USD and e["cp"] and not is_watched(e["cp"])):
+            groups[(e["chain"], e["wallet"], L(e["contract"]))].append(e)
+    for (ch, w, c), lst in groups.items():
+        t0 = min(e["ts"] for e in lst)
+        if any(x["dir"] == "OUT" and x["wallet"] == w and x["chain"] == ch and L(x["contract"] or "") == c and x["ts"] >= t0 for x in events): continue   # 売った/送った形跡があれば本物
+        raw = balance_of(ch, c, w)
+        if raw is None: continue
+        if raw == 0:
+            for e in lst: e["kind"] = "なりすまし(偽送金)"; e["note"] = "Transfer イベントだけで残高が増えていない（幻の送金・宣伝スパム）"
+            log(f"  幻の送金: {ch} {label(w)} {lst[0]['token']} ×{len(lst)}（≈{P.fmt_usd(sum(e.get('usd') or 0 for e in lst))}）→ balanceOf=0 のため なりすまし扱い")
+        time.sleep(0.2)
 
 # ------------------------------------------------------------ 子ウォレット登録
 _children_this_run = defaultdict(int)
@@ -978,9 +1010,13 @@ def run():
             time.sleep(0.3)
     events.extend(new_events)
     resolve_purchases(events)
+    # 直近48時間の未検証の受取を対象（なりすまし判定済みは対象外なので、2回目以降は新規分だけ eth_call が走る）
+    try: verify_phantom_receipts([e for e in events if e["ts"] >= now_ts - NOTIFY_MAX_AGE_H * 3600])
+    except Exception as e: warn(f"幻の送金チェックでエラー: {e!r}")
     # 残高（HOLDINGS_EVERY 回に1回、または初回・新規ウォレット追加時）
     prev = jload(DATA / "holdings.json", {"updated": None, "holdings": {}})
-    need = state["run_count"] % HOLDINGS_EVERY == 1 or not prev["holdings"] or prev.get("version") != 3 or any(f"{ch}:{w}" not in prev["holdings"] for w in wallets for ch in active if addr_fits(ch, w) and (wallets[w]["chains"] or wallets[w]["role"] == "本体"))
+    # 欠けキーの判定は下の取得ループと同じ条件（そのウォレットが活動するチェーン or 本体）。ずれると毎回「欠けあり」になり残高更新が毎回走る（本体で発生していた）
+    need = state["run_count"] % HOLDINGS_EVERY == 1 or not prev["holdings"] or prev.get("version") != 3 or any(f"{ch}:{w}" not in prev["holdings"] for w in wallets for ch in active if addr_fits(ch, w) and (ch in wallets[w]["chains"] or wallets[w]["role"] == "本体"))
     nowdt = datetime.now(timezone.utc); today = nowdt.strftime("%Y-%m-%d")
     state["daily_due"] = state.get("last_daily") != today and nowdt.hour >= DAILY_HOUR_UTC
     if state["daily_due"]: need = True                                   # 日次レポートの時点は必ず実残高で
