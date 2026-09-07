@@ -780,5 +780,10 @@ if __name__ == "__main__":
     if DRY_RUN:
         for e in sorted(new_events, key=lambda e: e["ts"])[-40:]:
             log(f"  {e['time'][:16]} {e['chain']:9s} {label(e['wallet']):14s} {e['kind']:14s} {e['dir']} {e['token']:12s} {e['amount']:>14.6g} {('$%.0f' % e['usd']) if e['usd'] is not None else '$?':>9s} ← {e['cp_label'][:40]}")
-    notify(new_events, holdings_doc["holdings"])
+    try:
+        notify(new_events, holdings_doc["holdings"])
+    finally:
+        if not DRY_RUN:   # notify() が更新する last_daily を必ず保存（run() の保存は notify 前なので）
+            for k in ("daily_due", "holdings_refreshed"): state.pop(k, None)
+            json.dump(state, open(DATA / "state.json", "w"), indent=2)
     html(holdings_doc)
