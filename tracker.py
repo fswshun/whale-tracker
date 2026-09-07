@@ -27,6 +27,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
+import portfolio as P
 
 ROOT = Path(__file__).resolve().parent
 DATA, DOCS = ROOT / "data", ROOT / "docs"
@@ -66,6 +67,11 @@ KNOWN_STABLES = {
     ("robinhood", "0x5fc5360d0400a0fd4f2af552add042d716f1d168"),
 }
 MIN_LIQ_USD = 5000     # DexScreener の流動性がこれ未満のペアの価格は使わない（偽トークン・ゴミ価格対策）
+BUY_ALERT_USD = float(CFG.get("buy_alert_usd", 5000))        # 買いはこの額から即時 Telegram
+MOVE_MIN_USD = float(CFG.get("move_min_usd", 5000))          # 一覧・まとめに載せる最小額
+PRICE_ALERT_PCT = float(CFG.get("price_move_alert_pct", 5))  # 1時間でリスク資産がこの%動いたらまとめを送る
+DAILY_HOUR_UTC = int(CFG.get("daily_report_hour_utc", 0))    # 日次レポート時刻（0 UTC = 9:00 JST）
+CTX = {"chains": CHAINS, "known_stables": KNOWN_STABLES}
 RUN_BUDGET_S = float(CFG.get("run_budget_minutes", 18)) * 60   # これを超えたら残りは次回に回して保存だけ行う（Actions timeout 対策）
 PRICE_CACHE_H = 24     # DexScreener が落ちている時に使う前回価格の有効時間
 T0 = time.time()
@@ -101,6 +107,7 @@ cursor = jload(DATA / "cursor.json", {})          # f"{chain}:{addr}" -> last bl
 state = jload(DATA / "state.json", {"run_count": 0})
 pending_eoa = jload(DATA / "pending_eoa.json", [])  # EOA判定が取れなかった候補（次回再判定）
 events = [json.loads(l) for l in open(DATA / "events.jsonl")] if (DATA / "events.jsonl").exists() else []
+snapshots = P.load_snapshots(DATA / "snapshots.jsonl")   # クラスター合算の残高履歴（1時間ごと、7日超は日次）
 labels = {k.lower(): v for k, v in CFG.get("labels", {}).items()}
 
 for a in CFG["main_wallets"]:
@@ -172,7 +179,9 @@ def bs_compat_all(chain, params):
     out = []
     for page in range(1, 6):
         res = bs_compat(chain, {**params, "page": page, "offset": BLOCKSCOUT_PAGE})
-        if res is None: return None
+        if res is None:
+            if page > 1: warn(f"{chain} {params.get('action')}: {page}ページ目が取れないため {len(out)} 行で打ち切り"); return out   # PRO API は page×offset ≤ 10000
+            return None
         out.extend(res)
         if len(res) < BLOCKSCOUT_PAGE: break
     return out
@@ -289,7 +298,7 @@ def rpc_balance_of(chain, contract, addr):
 def bs_reconcile_holdings(chain, addr, h, limit=25):
     """Blockscout の残高インデックスが欠落する銘柄（例: Base の O）を、tokentx の差引 → 価格あり → balanceOf で補完"""
     net = defaultdict(float); meta = {}
-    for t in bs_compat_all(chain, {"module": "account", "action": "tokentx", "address": addr, "startblock": 0, "endblock": 99999999, "sort": "asc"}) or []:
+    for t in bs_compat_all(chain, {"module": "account", "action": "tokentx", "address": addr, "startblock": 0, "endblock": 99999999, "sort": "desc"}) or []:
         dec = int(t.get("tokenDecimal") or 18); k = t["contractAddress"].lower(); v = int(t["value"]) / 10 ** dec
         net[k] += v if t["to"].lower() == addr.lower() else -v; meta[k] = (t.get("tokenSymbol") or "?", dec)
     missing = [k for k, v in net.items() if v > 1e-6 and (k not in h or h[k]["amount"] <= 0)]
@@ -646,6 +655,9 @@ def run():
     # 残高（HOLDINGS_EVERY 回に1回、または初回・新規ウォレット追加時）
     prev = jload(DATA / "holdings.json", {"updated": None, "holdings": {}})
     need = state["run_count"] % HOLDINGS_EVERY == 1 or not prev["holdings"] or prev.get("version") != 2 or any(f"{ch}:{w}" not in prev["holdings"] for w in wallets for ch in active if wallets[w]["chains"] or wallets[w]["role"] == "本体")
+    nowdt = datetime.now(timezone.utc); today = nowdt.strftime("%Y-%m-%d")
+    state["daily_due"] = state.get("last_daily") != today and nowdt.hour >= DAILY_HOUR_UTC
+    if state["daily_due"]: need = True                                   # 日次レポートの時点は必ず実残高で
     if need and over_budget(): warn("時間予算超過 → 残高更新は次回"); need = False
     if need:
         holdings = {}
@@ -661,6 +673,9 @@ def run():
         holdings_doc = {"version": 2, "updated": datetime.now(timezone.utc).isoformat(), "holdings": holdings}
     else:
         holdings_doc = prev; holdings = prev["holdings"]
+    state["holdings_refreshed"] = bool(need)
+    if need or (not snapshots and holdings_doc.get("holdings")):
+        snapshots.append(P.build_snapshot(holdings_doc, CTX)); snapshots[:] = P.prune_snapshots(snapshots)
     # 保存
     if not DRY_RUN:
         json.dump(wallets, open(DATA / "wallets.json", "w"), indent=2, ensure_ascii=False)
@@ -672,6 +687,7 @@ def run():
             for e in sorted(events, key=lambda e: e["ts"]): f.write(json.dumps(e, ensure_ascii=False) + "\n")
         json.dump(holdings_doc, open(DATA / "holdings.json", "w"), indent=2, ensure_ascii=False)
         json.dump(price_cache, open(DATA / "prices.json", "w"))
+        P.save_snapshots(DATA / "snapshots.jsonl", snapshots)
     return new_events, holdings_doc
 
 # ------------------------------------------------------------ 集計（バッチ・比率）
@@ -706,38 +722,42 @@ def tg(text):
         if not r.ok: warn("Telegram 送信失敗:", r.status_code, r.text[:200])
 
 def notify(new_events, holdings):
+    """(1) 買い ≥ BUY_ALERT_USD と新ウォレット検出は即時
+       (2) 残高更新した回（1時間ごと）は前回時点との差を「まとめ」で（動きがあった時だけ）
+       (3) 日次（DAILY_HOUR_UTC）は前日 9:00 JST 比の分解を必ず送る"""
+    names = P.role_names(wallets); pages = CFG.get("pages_url", "")
     cutoff = time.time() - NOTIFY_MAX_AGE_H * 3600
-    notable = []
-    for e in new_events:
-        if e["ts"] < cutoff: continue
-        if e["kind"] == "新ウォレット開設(ガス種銭)": notable.append(e); continue
-        if e["kind"] == "ダスト": continue
-        if (e["usd"] or 0) >= THRESHOLD: notable.append(e)
-    if not notable: log("通知対象なし"); return
-    pages = CFG.get("pages_url", "")
-    lines = ["🐋 クジラ動きました"]
-    shown_tx = set()
-    for e in [e for e in notable if e["kind"] == "内部移動" and e["dir"] == "OUT"]:
-        base = main_holding_of(e["contract"], holdings) + (e["amount"] if wallets[e["wallet"]]["role"] == "本体" else 0)
-        pct = f"（本体保有の{e['amount'] / base * 100:.1f}%）" if base else ""
-        lines.append(f"↪ {e['time'][5:16]} {label(e['wallet'])} → {e['cp_label']}: {e['token']} {e['amount']:,.4g} ≈ ${(e['usd'] or 0):,.0f}{pct}")
-        shown_tx.add(e["tx"])
-    for b in batches(notable):
-        base = main_holding_of(b["contract"], holdings)
-        pct = f" 本体保有比{b['amount'] / (base + b['amount']) * 100:.1f}%" if base else ""
-        lines.append(f"🔻 売却 {b['start'][5:16]}–{b['end'][11:16]} {label(b['wallet'])} {b['token']} {b['amount']:,.0f} ≈ ${b['usd']:,.0f} ({b['n']}回){pct}")
-    for e in notable:
-        if e["kind"] in ("購入(スワップ)", "購入(クロスチェーン)", "受取(原資未確認)"):
-            fund = f"（原資 ${e['funding_usd']:,.0f}）" if e.get("funding_usd") else ""
-            lines.append(f"🟢 {e['kind']} {e['time'][5:16]} {label(e['wallet'])} {e['token']} {e['amount']:,.0f} ≈ ${(e['usd'] or 0):,.0f} ← {e['cp_label']}{fund}")
-        elif e["kind"] == "新ウォレット開設(ガス種銭)":
-            lines.append(f"🆕 新ウォレット {e['cp_label']} に種銭 {e['amount']:.4f} {e['token']}（{label(e['wallet'])}から）→ 監視に追加")
-        elif e["kind"] == "内部移動" and e["dir"] == "IN" and e["contract"] == "native" and e["tx"] not in shown_tx:
-            lines.append(f"💰 代金戻り {e['time'][5:16]} {label(e['wallet'])} ← {e['cp_label']}: {e['amount']:,.2f} {e['token']} ≈ ${(e['usd'] or 0):,.0f}")
-        elif e["kind"] in ("サービスへ送金", "外部へ送金"):
-            lines.append(f"📤 {e['kind']} {e['time'][5:16]} {label(e['wallet'])} → {e['cp_label']}: {e['amount']:,.4g} {e['token']} ≈ ${(e['usd'] or 0):,.0f}")
-    if pages and "<" not in pages: lines.append(f"詳細: {pages}")
-    tg("\n".join(lines))
+    recent = [e for e in new_events if e["ts"] >= cutoff]
+    lines = []
+    buys = P.group_trades(recent, "buy", CTX, BUY_ALERT_USD)
+    if buys: lines += P.buy_alert_lines(buys, names, CTX)
+    for e in recent:
+        if e["kind"] == "新ウォレット開設(ガス種銭)":
+            lines.append(f"🆕 新ウォレット {names.get(e['cp'], '?')} を検出（{names.get(e['wallet'], '?')} から種銭 {e['amount']:.4f} {e['token']}）→ 監視に追加")
+    if lines:
+        if pages and "<" not in pages: lines.append(f"詳細: {pages}")
+        tg("\n".join(lines))
+    else:
+        log("即時通知なし")
+    # 日次
+    if state.get("daily_due"):
+        pts = P.cutoff_points(snapshots)
+        if len(pts) >= 2:
+            br = P.bridge(pts[-2], pts[-1], events, CTX, MOVE_MIN_USD)
+            tg(P.digest_text(br, names, CTX, f"📊 日次レポート {P.jst(pts[-1]['ts']).strftime('%m/%d %H:%M')} JST（{pts[-2]['label']} → {pts[-1]['label']}）", pages))
+        else:
+            tg(f"📊 日次レポート: 記録開始。明日 9:00 JST から前日比（値動き / 利確 / 買い）を送ります。現在の総資産 {P.fmt_usd(snapshots[-1]['total']) if snapshots else '—'}")
+        state["last_daily"] = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        return
+    # 1時間まとめ（残高を更新した回だけ、動きがあった時だけ）
+    if state.get("holdings_refreshed") and len(snapshots) >= 2:
+        p0 = {"label": P.jst(snapshots[-2]["ts"]).strftime("%H:%M"), "snap": snapshots[-2]}
+        p1 = {"label": P.jst(snapshots[-1]["ts"]).strftime("%H:%M"), "snap": snapshots[-1]}
+        br = P.bridge(p0, p1, events, CTX, MOVE_MIN_USD)
+        if P.notable(br, MOVE_MIN_USD, PRICE_ALERT_PCT):
+            tg(P.digest_text(br, names, CTX, f"🕐 まとめ {p0['label']}→{p1['label']} JST", pages))
+        else:
+            log(f"1時間まとめ: 動きなし（利確 {br['realized']:.0f} / 買い {br['buys']:.0f} / 値動き {br['price']:.0f}）")
 
 # ------------------------------------------------------------ HTML
 def html(holdings_doc):
@@ -745,7 +765,10 @@ def html(holdings_doc):
     hd = holdings_doc["holdings"] if isinstance(holdings_doc, dict) and "holdings" in holdings_doc else holdings_doc
     upd = holdings_doc.get("updated") if isinstance(holdings_doc, dict) else None
     out = DOCS / ("index.dryrun.html" if DRY_RUN else "index.html")
-    render(CFG, CHAINS, wallets, events, hd, batches(events), THRESHOLD, label, out, holdings_updated=upd)
+    pts = P.cutoff_points(snapshots, n=45)
+    bridges = [P.bridge(pts[i - 1], pts[i], events, CTX, MOVE_MIN_USD) for i in range(1, len(pts))]
+    timeline = {"points": pts, "bridges": bridges, "names": P.role_names(wallets), "ctx": CTX, "min_usd": MOVE_MIN_USD}
+    render(CFG, CHAINS, wallets, events, hd, batches(events), THRESHOLD, label, out, holdings_updated=upd, timeline=timeline)
     log("HTML 生成:", out)
 
 if __name__ == "__main__":
