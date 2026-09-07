@@ -1,7 +1,7 @@
 name: whale-tracker
 on:
   schedule:
-    - cron: "*/15 * * * *"     # 15分ごと（GitHub の都合で数分遅れることあり）
+    - cron: "*/10 * * * *"     # 10分ごと（GitHub の都合で数分遅れることあり。5分にすると無料枠を超える）
   workflow_dispatch:           # 手動実行ボタン
 permissions:
   contents: write
