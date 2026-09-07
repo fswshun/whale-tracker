@@ -94,6 +94,31 @@ def build_snapshot(holdings_doc, ctx):
     return {"ts": ts, "time": datetime.fromtimestamp(ts, timezone.utc).isoformat(timespec="seconds"), **{k: round(v, 2) for k, v in tot.items()},
             "by_wallet": {w: {k: round(v, 2) for k, v in d.items()} for w, d in byw.items()}, "pos": pos}
 
+def reconstruct_backwards(snap, events, target_ts, ctx):
+    """記録開始前の時点を推定する: 最古のスナップショットから、その間のイベント（数量）を逆算して巻き戻す。
+    価格は不明なので snap の価格（無ければイベント処理時の価格）を流用 → 値動きは含まれない（approx=True）"""
+    import copy
+    pos = copy.deepcopy(snap["pos"])
+    evs = sorted([e for e in events if target_ts < e["ts"] <= snap["ts"]], key=lambda e: -e["ts"])
+    for e in evs:
+        f = flow_of(e, ctx)
+        if f in ("internal", "noise"): continue
+        k = f"{e['chain']}:{(e['contract'] or '').lower()}"
+        if k not in pos:
+            b = bucket_of(e["chain"], e["contract"], ctx)
+            if b == "risk" and not e.get("price"): continue
+            pos[k] = {"sym": e["token"], "amt": 0.0, "px": e.get("price"), "usd": 0.0, "b": b}
+        pos[k]["amt"] += -e["amount"] if e["dir"] == "IN" else e["amount"]
+    for k in list(pos):
+        p = pos[k]
+        if p["amt"] <= 1e-9: pos.pop(k); continue
+        p["amt"] = round(p["amt"], 8); p["usd"] = p["amt"] * p["px"] if p.get("px") else 0.0
+        if p["b"] == "risk" and p["usd"] < 100: pos.pop(k)
+    tot = {"total": 0.0, "risk": 0.0, "quasi": 0.0, "cash": 0.0}
+    for p in pos.values(): tot["total"] += p["usd"]; tot[p["b"]] += p["usd"]
+    return {"ts": int(target_ts), "time": datetime.fromtimestamp(target_ts, timezone.utc).isoformat(timespec="seconds"), **{k: round(v, 2) for k, v in tot.items()},
+            "by_wallet": {}, "pos": pos, "approx": True}
+
 def load_snapshots(path):
     if not path.exists(): return []
     out = []
@@ -110,7 +135,7 @@ def prune_snapshots(snaps, keep_hourly_days=7):
     if not snaps: return snaps
     now = snaps[-1]["ts"]; keep = []; seen_cut = set()
     for s in reversed(snaps):
-        if now - s["ts"] <= keep_hourly_days * DAY: keep.append(s); continue
+        if now - s["ts"] <= keep_hourly_days * DAY or s.get("approx") or s["ts"] % DAY == 0: keep.append(s); continue   # 推定点・00:00 UTC ちょうどの点は常に残す
         cut = (s["ts"] // DAY + 1) * DAY        # この時点が属する日の次の 00:00 UTC
         if cut not in seen_cut: seen_cut.add(cut); keep.append(s)
     return sorted(keep, key=lambda s: s["ts"])
@@ -124,13 +149,13 @@ def cutoff_points(snaps, n=30):
     if not snaps: return []
     first, last = snaps[0]["ts"], snaps[-1]["ts"]; pts = []
     c = (first // DAY + 1) * DAY
-    if c - first > 900:   # 記録開始が 00:00 UTC ちょうどでない場合は「開始」時点を置く（初日の日次レポート用）
+    if c - first > 6 * 3600:   # 記録開始から最初の 00:00 UTC まで 6 時間以上あく場合だけ「開始」時点を置く（初日の日次レポート用）
         pts.append({"ts": first, "label": jst(first).strftime("開始 %-m/%-d %H:%M"), "date": jst(first).strftime("%Y-%m-%d"), "snap": snaps[0]})
     while c <= last + 900:
         cand = [s for s in snaps if c - 6 * 3600 <= s["ts"] <= c + 900]
         if cand:
             s = min(cand, key=lambda s: abs(s["ts"] - c))
-            pts.append({"ts": c, "label": jst(c).strftime("%-m/%-d 9:00"), "date": jst(c).strftime("%Y-%m-%d"), "snap": s})
+            pts.append({"ts": c, "label": jst(c).strftime("%-m/%-d 9:00") + ("(推定)" if s.get("approx") else ""), "date": jst(c).strftime("%Y-%m-%d"), "snap": s})
         c += DAY
     if not pts or pts[-1]["snap"]["ts"] != last:
         pts.append({"ts": last, "label": "現在", "date": "now", "snap": snaps[-1]})
@@ -203,7 +228,7 @@ def bridge(p0, p1, events, ctx, min_usd=5000.0):
                           "amt0": amt0, "amt1": amt1, "px0": px0, "px1": px1, "usd0": usd0, "usd1": usd1,
                           "price_effect": pe, "qty_effect": usd1 - usd0 - pe, "status": "新規" if not a else ("全売却" if not b or amt1 <= 0 else "")})
     positions.sort(key=lambda x: -max(x["usd0"], x["usd1"]))
-    return {"t0": t0, "t1": t1, "label0": p0["label"], "label1": p1["label"],
+    return {"t0": t0, "t1": t1, "label0": p0["label"], "label1": p1["label"], "approx": bool(s0.get("approx") or s1.get("approx")),
             "total0": s0["total"], "total1": s1["total"], "risk0": risk0, "risk1": risk1,
             "quasi0": s0["quasi"], "quasi1": s1["quasi"], "cash0": s0["cash"], "cash1": s1["cash"],
             "price": price, "buys": B, "sells": S, "out": O, "in": I, "resid": resid, "exec_cost": exec_cost, "buys_val": B_val, "sells_val": S_val,

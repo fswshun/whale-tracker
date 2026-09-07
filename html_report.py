@@ -131,6 +131,7 @@ def bridge_panel(br, names, ctx, idx, min_usd):
     head = (f"<div style='font-size:16px;font-weight:600'>{esc(br['label0'])} {P.fmt_usd(br['total0'])} → {esc(br['label1'])} {P.fmt_usd(br['total1'])}"
             f" <span class='{cls_delta(br['total1'] - br['total0'])}'>{P.fmt_usd(br['total1'] - br['total0'], True)}（{P.fmt_pct(br['total_pct'])}）</span></div>"
             f"<div class='sub'>リスク資産 {P.fmt_usd(br['risk0'])} → {P.fmt_usd(br['risk1'])}（{P.fmt_pct(br['risk_pct'])}）{realized_pct}　準現金 {P.fmt_usd(br['quasi1'])}　現金 {P.fmt_usd(br['cash1'])}</div>")
+    if br.get("approx"): head += "<div class='sub' style='color:var(--warn)'>※ 記録開始前の時点は、その後の取引を数量で逆算した推定値。当時の価格が不明なため 9/6 朝の価格で評価しており、この期間の「値動き」は含まれません。</div>"
     movers = [m for m in br["movers"] if abs(m["usd"]) >= min_usd][:8]
     mv = ("<table><thead><tr><th>銘柄</th><th class='r'>価格変化</th><th class='r'>寄与額</th><th class='r'>現在評価</th></tr></thead><tbody>" + "".join(
         f"<tr><td>{esc(m['sym'])}</td><td class='r {cls_delta(m['pct'])}'>{m['pct']:+.1f}%</td><td class='r {cls_delta(m['usd'])}'>{P.fmt_usd(m['usd'], True)}</td><td class='r'>{usd(m['hold'])}</td></tr>" for m in movers) + "</tbody></table>") if movers else "<div class='sub'>大きな値動きなし</div>"
