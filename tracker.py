@@ -132,11 +132,13 @@ def is_lookalike(a):
     return any(w != a and w[:6] == a[:6] and w[-3:] == a[-3:] for w in wallets)
 
 # ------------------------------------------------------------ HTTP 共通
+API_CALLS = defaultdict(int)   # ホスト別の呼び出し回数（無料枠の見積もり用。実行末尾でログ）
 def http_json(method, url, retries=3, timeout=30, **kw):
     """JSON を返す。失敗（429 / 5xx / Cloudflare challenge / 例外）は退避して再試行、最終的に None"""
     last = ""
     for i in range(retries):
         try:
+            API_CALLS[url.split("/")[2].split("?")[0]] += 1
             r = S.request(method, url, timeout=timeout, **kw)
             if r.status_code == 429:
                 last = f"HTTP 429 {r.text[:80]!r}"; time.sleep(6 * (i + 1)); continue
@@ -787,6 +789,7 @@ if __name__ == "__main__":
     if DRY_RUN: log("DRY_RUN: 通知・保存なし")
     new_events, holdings_doc = run()
     log(f"新イベント {len(new_events)} 件 / 監視ウォレット {len(wallets)} / 保留EOA {len(pending_eoa)} / 所要 {(time.time()-T0)/60:.1f} 分")
+    log("API呼び出し数: " + ", ".join(f"{h} {n}" for h, n in sorted(API_CALLS.items(), key=lambda kv: -kv[1])))
     if DRY_RUN:
         for e in sorted(new_events, key=lambda e: e["ts"])[-40:]:
             log(f"  {e['time'][:16]} {e['chain']:9s} {label(e['wallet']):14s} {e['kind']:14s} {e['dir']} {e['token']:12s} {e['amount']:>14.6g} {('$%.0f' % e['usd']) if e['usd'] is not None else '$?':>9s} ← {e['cp_label'][:40]}")
