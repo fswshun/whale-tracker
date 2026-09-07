@@ -84,6 +84,8 @@ BUY_ALERT_USD = float(CFG.get("buy_alert_usd", 5000))        # 買いはこの�
 MOVE_MIN_USD = float(CFG.get("move_min_usd", 5000))          # 一覧・まとめに載せる最小額
 PRICE_ALERT_PCT = float(CFG.get("price_move_alert_pct", 5))  # 1時間でリスク資産がこの%動いたらまとめを送る
 DAILY_HOUR_UTC = int(CFG.get("daily_report_hour_utc", 0))    # 日次レポート時刻（0 UTC = 9:00 JST）
+PEER_REPOS = CFG.get("peer_repos", ["fswshun/whale-tracker", "fswshun/whale-unipcs", "fswshun/whale-avast", "fswshun/whale-kyle"])   # 同時買い検出の相手
+CROSS_MIN_USD = float(CFG.get("cross_buy_min_usd", 1000))    # 同時買いに数える最小額（1人あたり）
 CTX = {"chains": CHAINS, "known_stables": KNOWN_STABLES}
 RUN_BUDGET_S = float(CFG.get("run_budget_minutes", 18)) * 60   # これを超えたら残りは次回に回して保存だけ行う（Actions timeout 対策）
 PRICE_CACHE_H = 24     # DexScreener が落ちている時に使う前回価格の有効時間
@@ -1037,6 +1039,8 @@ def notify(new_events, holdings):
         tg("\n".join(lines))
     else:
         log("即時通知なし")
+    try: cross_whale_alert(pages)
+    except Exception as e: warn(f"同時買い検出でエラー: {e!r}")
     # 日次
     if state.get("daily_due"):
         pts = P.cutoff_points(snapshots)
@@ -1058,6 +1062,49 @@ def notify(new_events, holdings):
             tg(P.digest_text(br, names, CTX, f"🕐 まとめ {p0['label']}→{p1['label']} JST", pages))
         else:
             log(f"1時間まとめ: 動きなし（利確 {br['realized']:.0f} / 買い {br['buys']:.0f} / 値動き {br['price']:.0f}）")
+
+# ------------------------------------------------------------ 複数クジラの同時買い（超重要コール）
+def cross_whale_alert(pages):
+    """他のクジラのリポジトリから直近の買いを集め、同じ日(JST)に同じ銘柄を2人以上が買っていたら緊急通知。
+       送るのは「その銘柄を最後に買ったクジラ」のリポジトリだけ（重複送信防止）。人数が増えたら再通知"""
+    me = WHALE_NAME or "本体"
+    cut = time.time() - 2 * 86400
+    groups = defaultdict(dict)     # (date, chain, contract) -> whale -> {usd, amount, last, sym, who}
+    def add(name, evs, names):
+        for a in P.group_trades([e for e in evs if e["ts"] >= cut], "buy", CTX, CROSS_MIN_USD):
+            key = (P.jst(a["last"]).strftime("%Y-%m-%d"), a["chain"], a["contract"])
+            g = groups[key].setdefault(name, {"usd": 0.0, "amount": 0.0, "last": 0, "sym": a["sym"], "who": set()})
+            g["usd"] += a["value"]; g["amount"] += a["amount"]; g["last"] = max(g["last"], a["last"]); g["who"].add(names.get(a["wallet"], "?"))
+    add(me, events, P.role_names(wallets))
+    for repo in PEER_REPOS:
+        if repo.endswith("/" + (ROOT.name if ROOT.name.startswith("whale-") else "whale-tracker")): continue
+        try:
+            ev = [json.loads(l) for l in http_text(f"https://raw.githubusercontent.com/{repo}/main/data/events.jsonl").splitlines() if l.strip()]
+            w = json.loads(http_text(f"https://raw.githubusercontent.com/{repo}/main/data/wallets.json") or "{}")
+            cfg = json.loads(http_text(f"https://raw.githubusercontent.com/{repo}/main/config.json") or "{}")
+            add(cfg.get("name") or repo.split("/")[-1].replace("whale-", ""), ev, P.role_names(w))
+        except Exception as e:
+            warn(f"同時買い検出: {repo} の読み込み失敗 {e!r}")
+    alerted = set(tuple(x) for x in state.get("cross_alerted", []))
+    for (date, chain, contract), by in groups.items():
+        if len(by) < 2: continue
+        latest = max(by, key=lambda n: by[n]["last"])
+        if latest != me: continue
+        key = (date, chain, contract, len(by))
+        if key in alerted: continue
+        sym = next(iter(by.values()))["sym"]
+        lines = [f"🚨🚨 複数クジラが同日に購入【{P.symc(sym, chain)}】{date[5:].replace('-', '/')}", f"{len(by)}人が買い（合計 {P.fmt_usd(sum(g['usd'] for g in by.values()))}）:"]
+        for n, g in sorted(by.items(), key=lambda kv: kv[1]["last"]):
+            lines.append(f"  {n}（{'/'.join(sorted(g['who']))}） {P.fmt_qty(g['amount'])} ≈ {P.fmt_usd(g['usd'])}  {P.jst(g['last']).strftime('%H:%M')} JST")
+        link = P.dex_link(chain, contract, CTX)
+        if link: lines.append(link)
+        if pages and "<" not in pages: lines.append(f"詳細: {pages}")
+        tg("\n".join(lines)); alerted.add(key); log(f"🚨 同時買い通知: {sym} {date} {len(by)}人")
+    state["cross_alerted"] = [list(k) for k in alerted if k[0] >= P.jst(cut).strftime("%Y-%m-%d")]
+
+def http_text(url):
+    r = S.get(url, timeout=60)
+    return r.text if r.ok else ""
 
 # ------------------------------------------------------------ HTML
 def html(holdings_doc):
