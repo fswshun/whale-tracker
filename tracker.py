@@ -399,9 +399,22 @@ def nr_rows(chain, addr, from_block, to_block):
             if amount > 0: rows.append(dict(base, token=CHAINS[chain]["native"], contract="native", native=True, internal=True))
         else:
             if amount > 0: rows.append(dict(base, token=CHAINS[chain]["native"], contract="native", native=True))
-    # 各 tx の送信者と input を見て「本人発か」「コントラクト呼出か」を補う（新規 tx は少数なので都度取得）
-    for tx in {r["tx"] for r in rows if r["tx"]}:
-        t = nr_rpc(chain, "eth_getTransactionByHash", [tx])
+    # 各 tx の送信者と input を見て「本人発か」「コントラクト呼出か」を補う（JSON-RPC batch で 50 件ずつ）
+    txs = sorted({r["tx"] for r in rows if r["tx"]}); details = {}
+    for i in range(0, len(txs), 50):
+        chunk = txs[i:i + 50]
+        j = http_json("POST", CHAINS[chain]["rpc"].format(key=NODEREAL_KEY), json=[{"jsonrpc": "2.0", "id": n, "method": "eth_getTransactionByHash", "params": [tx]} for n, tx in enumerate(chunk)])
+        if isinstance(j, list):
+            for item in j:
+                t = item.get("result") if isinstance(item, dict) else None
+                if isinstance(t, dict) and t.get("hash"): details[t["hash"].lower()] = t
+        else:   # batch 非対応なら1件ずつ
+            for tx in chunk:
+                t = nr_rpc(chain, "eth_getTransactionByHash", [tx])
+                if isinstance(t, dict): details[tx.lower()] = t
+        time.sleep(0.2)
+    for tx in txs:
+        t = details.get(tx.lower())
         if not isinstance(t, dict): continue
         for r in rows:
             if r["tx"] == tx: r["tx_from"] = L(t.get("from") or "")
@@ -553,6 +566,10 @@ def hl_has_activity(addr):
 
 # ------------------------------------------------------------ プロバイダ振り分け
 def provider(chain): return CHAINS[chain]["provider"]
+def addr_fits(chain, a):
+    """そのチェーンで有効なアドレス形式か（EVM チェーンは 0x+40桁、Solana は base58）"""
+    a = a or ""
+    return (not a.startswith("0x") and 32 <= len(a) <= 44) if provider(chain) == "helius" else (a.startswith("0x") and len(a) == 42)
 def chain_available(chain):
     pv = provider(chain)
     return (bool(NODEREAL_KEY) if pv == "nodereal" else bool(HELIUS_KEY) if pv == "helius" else True)
@@ -663,9 +680,11 @@ def classify_tx(chain, owner, trs):
     outs = [r for r in trs if r["frm"] == owner and r["amount"] > 0]
     ins = [r for r in trs if r["to"] == owner and r["amount"] > 0]
     # 本人が署名していない tx でトークンだけが「出ていく」＝スキャムトークンの偽 Transfer（アドレスポイズニング）
+    # ただし価格の付く本物トークン（USDC 等）の送出は、Solana のガスレス送金（手数料を別人が払う）なので本物として扱う
     if outs and not ins and all(not r["native"] and r.get("tx_from") != owner for r in outs):
-        cp = next((r["to"] for r in outs), "")
-        return "なりすまし(偽送金)", [], [], cp
+        if all(price(chain, r["token"], r["contract"]) is None for r in outs):
+            cp = next((r["to"] for r in outs), "")
+            return "なりすまし(偽送金)", [], [], cp
     if outs and all(is_burn(r["to"]) for r in outs) and not ins:
         return "バーン", outs, [], outs[0]["to"]
     tok_out = [r for r in outs if not r["native"]]; tok_in = [r for r in ins if not r["native"]]
@@ -727,7 +746,7 @@ def run():
     if not active:
         for ch in CHAINS:
             if not chain_available(ch): warn(f"{ch}: キー未設定のため探索スキップ"); continue
-            if any(has_activity(ch, a) for a in CFG["main_wallets"]): active.append(ch)
+            if any(has_activity(ch, a) for a in CFG["main_wallets"] if addr_fits(ch, a)): active.append(ch)
         log("活動のあるチェーン:", active)
         if all(chain_available(ch) for ch in CHAINS):
             CFG["chains"] = active
@@ -749,6 +768,7 @@ def run():
         processed.add(w)
         for ch in poll:
             key = f"{ch}:{w}"
+            if not addr_fits(ch, w): continue
             if over_budget(): warn(f"時間予算 {RUN_BUDGET_S/60:.0f} 分超過 → {ch} {short(w)} 以降は次回に持ち越し"); continue
             rows, new_cur = fetch_rows(ch, w)
             if rows is None: warn(f"{ch} {short(w)}: 取得失敗（次回に持ち越し）"); continue
@@ -787,7 +807,7 @@ def run():
     resolve_purchases(events)
     # 残高（HOLDINGS_EVERY 回に1回、または初回・新規ウォレット追加時）
     prev = jload(DATA / "holdings.json", {"updated": None, "holdings": {}})
-    need = state["run_count"] % HOLDINGS_EVERY == 1 or not prev["holdings"] or prev.get("version") != 2 or any(f"{ch}:{w}" not in prev["holdings"] for w in wallets for ch in active if wallets[w]["chains"] or wallets[w]["role"] == "本体")
+    need = state["run_count"] % HOLDINGS_EVERY == 1 or not prev["holdings"] or prev.get("version") != 2 or any(f"{ch}:{w}" not in prev["holdings"] for w in wallets for ch in active if addr_fits(ch, w) and (wallets[w]["chains"] or wallets[w]["role"] == "本体"))
     nowdt = datetime.now(timezone.utc); today = nowdt.strftime("%Y-%m-%d")
     state["daily_due"] = state.get("last_daily") != today and nowdt.hour >= DAILY_HOUR_UTC
     if state["daily_due"]: need = True                                   # 日次レポートの時点は必ず実残高で
@@ -796,6 +816,7 @@ def run():
         holdings = {}
         for w in wallets:
             for ch in active:
+                if not addr_fits(ch, w): continue
                 if ch not in wallets[w]["chains"] and wallets[w]["role"] != "本体": continue
                 h = fetch_holdings(ch, w)
                 prefetch_prices(ch, [v["contract"] for v in h.values() if not v.get("price")])
