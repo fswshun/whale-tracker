@@ -357,7 +357,7 @@ def nr_rpc(chain, method, params):
         if method == "nr_getTokenHoldings": return None                      # Alchemy は別経路（alc_holdings）
         method = ALCHEMY_METHODS.get(method, method)
         if method == "alchemy_getAssetTransfers":
-            p = dict(params[0]); p["category"] = ["erc20" if c == "20" else c for c in p.get("category", [])]; p["withMetadata"] = True
+            p = dict(params[0]); p["category"] = [("erc20" if c == "20" else c) for c in p.get("category", []) if c != "internal"]; p["withMetadata"] = True   # Alchemy の BNB は internal 非対応
             params = [p]
     j = http_json("POST", url, json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
     if not isinstance(j, dict): return None
@@ -463,6 +463,7 @@ def nr_lookback_blocks(chain, latest, hours):
 def nr_is_contract(chain, addr):
     code = nr_rpc(chain, "eth_getCode", [addr, "latest"])
     if code is None: return None
+    if isinstance(code, str) and code.lower().startswith("0xef0100"): return False   # EIP-7702 の委任コード＝スマートアカウント化した EOA
     return code not in ("0x", "")
 
 def alc_holdings(chain, addr):
