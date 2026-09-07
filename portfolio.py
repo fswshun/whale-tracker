@@ -182,6 +182,19 @@ def bridge(p0, p1, events, ctx, min_usd=5000.0):
     B, S, O, I = (sum(a["usd"] for a in buys), sum(a["usd"] for a in sells), sum(a["usd"] for a in outs), sum(a["usd"] for a in ins))
     risk0, risk1 = s0["risk"], s1["risk"]
     resid = risk1 - risk0 - price - B + S + O - I
+    # 銘柄ごとの 枚数・単価・評価額 の前後比較（リスク資産）。評価額の増減を 値動き分 と 枚数増減分 に分ける
+    positions = []
+    for k in set(s0["pos"]) | set(s1["pos"]):
+        a, b = s0["pos"].get(k), s1["pos"].get(k)
+        if (a or b)["b"] != "risk": continue
+        amt0, amt1 = (a["amt"] if a else 0.0), (b["amt"] if b else 0.0)
+        px0, px1 = (a.get("px") if a else None), (b.get("px") if b else None)
+        usd0, usd1 = (a["usd"] if a else 0.0), (b["usd"] if b else 0.0)
+        pe = amt0 * (px1 - px0) if (px0 and px1) else 0.0
+        positions.append({"key": k, "sym": (b or a)["sym"], "chain": k.split(":")[0], "contract": k.split(":")[1],
+                          "amt0": amt0, "amt1": amt1, "px0": px0, "px1": px1, "usd0": usd0, "usd1": usd1,
+                          "price_effect": pe, "qty_effect": usd1 - usd0 - pe, "status": "新規" if not a else ("全売却" if not b or amt1 <= 0 else "")})
+    positions.sort(key=lambda x: -max(x["usd0"], x["usd1"]))
     return {"t0": t0, "t1": t1, "label0": p0["label"], "label1": p1["label"],
             "total0": s0["total"], "total1": s1["total"], "risk0": risk0, "risk1": risk1,
             "quasi0": s0["quasi"], "quasi1": s1["quasi"], "cash0": s0["cash"], "cash1": s1["cash"],
@@ -190,7 +203,7 @@ def bridge(p0, p1, events, ctx, min_usd=5000.0):
             "total_pct": ((s1["total"] / s0["total"] - 1) * 100) if s0["total"] else None,
             "risk_pct": ((risk1 / risk0 - 1) * 100) if risk0 else None,
             "min_usd": min_usd, "movers": sorted(movers, key=lambda m: -abs(m["usd"])), "buy_list": buys, "sell_list": sells,
-            "out_list": outs, "in_list": ins, "cash_out_list": cash_outs, "internal": internal, "n_events": len(evs)}
+            "out_list": outs, "in_list": ins, "cash_out_list": cash_outs, "internal": internal, "n_events": len(evs), "positions": positions}
 
 def notable(br, min_usd=5000.0, price_pct=5.0):
     """1時間まとめを送るべきか：利確/買い/流出が min_usd 以上、または値動きがリスク資産の price_pct% 以上"""

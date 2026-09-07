@@ -134,12 +134,28 @@ def bridge_panel(br, names, ctx, idx, min_usd):
         f"<tr><td>{esc(m['sym'])}</td><td class='r {cls_delta(m['pct'])}'>{m['pct']:+.1f}%</td><td class='r {cls_delta(m['usd'])}'>{P.fmt_usd(m['usd'], True)}</td><td class='r'>{usd(m['hold'])}</td></tr>" for m in movers) + "</tbody></table>") if movers else "<div class='sub'>大きな値動きなし</div>"
     internal = ("<details><summary>内部移動（本体⇔子⇔孫、総資産は不変） " + str(len(br["internal"])) + " 件</summary><div class='sub'>" + "、".join(
         f"{jst(e['ts'])} {who(e['wallet'])}→{who(e['cp'])} {esc(e['token'])} {esc(P.fmt_qty(e['amount']))} ({usd(e.get('usd'))})" for e in br["internal"][:20]) + "</div></details>") if br["internal"] else ""
+    # 銘柄ごとの前後比較
+    pos = [x for x in br.get("positions", []) if max(x["usd0"], x["usd1"]) >= min_usd]
+    def pxs(v): return ("$%.4g" % v) if v else "—"
+    def prow(x):
+        dq = x["amt1"] - x["amt0"]; dqs = f"<span class='{cls_delta(dq)}'>{'+' if dq > 0 else ''}{P.fmt_qty(dq) if dq else '±0'}</span>" if abs(dq) > 1e-9 else "<span class='mute'>±0</span>"
+        ppct = ((x["px1"] / x["px0"] - 1) * 100) if (x["px0"] and x["px1"]) else None
+        st = f" <span class='tag'>{x['status']}</span>" if x["status"] else ""
+        return (f"<tr><td>{esc(x['sym'])}{st}</td><td class='r'>{esc(P.fmt_qty(x['amt0']))} → {esc(P.fmt_qty(x['amt1']))}</td><td class='r'>{dqs}</td>"
+                f"<td class='r'>{pxs(x['px0'])} → {pxs(x['px1'])}</td><td class='r {cls_delta(ppct or 0)}'>{P.fmt_pct(ppct)}</td>"
+                f"<td class='r'>{usd(x['usd0'])} → {usd(x['usd1'])}</td><td class='r {cls_delta(x['usd1'] - x['usd0'])}'>{P.fmt_usd(x['usd1'] - x['usd0'], True)}</td>"
+                f"<td class='r {cls_delta(x['price_effect'])}'>{P.fmt_usd(x['price_effect'], True)}</td><td class='r {cls_delta(x['qty_effect'])}'>{P.fmt_usd(x['qty_effect'], True)}</td></tr>")
+    ptable = ("<div style='overflow-x:auto'><table><thead><tr><th>銘柄</th><th class='r'>枚数 前 → 後</th><th class='r'>枚数増減</th><th class='r'>単価 前 → 後</th><th class='r'>価格変化</th>"
+              "<th class='r'>評価額 前 → 後</th><th class='r'>評価額増減</th><th class='r'>うち値動き</th><th class='r'>うち売買</th></tr></thead><tbody>"
+              + "".join(prow(x) for x in pos[:25]) + "</tbody></table></div>"
+              + (f"<div class='sub'>ほか {len(pos) - 25} 銘柄（${min_usd:,.0f} 以上）</div>" if len(pos) > 25 else "")) if pos else "<div class='sub'>対象なし</div>"
     return (f"<div class='day' id='day-{idx}'{'' if idx == 0 else ' hidden'}>{head}<div class='bridge'>{grid}"
             f"<span class='k tot'>リスク資産の増減 合計</span><span class='tot'></span><span class='v tot {cls_delta(br['risk1'] - br['risk0'])}'>{P.fmt_usd(br['risk1'] - br['risk0'], True)}</span></div>"
             f"<h3>🟢 買い（${min_usd:,.0f} 以上）</h3>{trades_table([a for a in br['buy_list'] if a['usd'] >= min_usd], 'buy')}"
             f"<h3>🔻 利確 ＝ 売り</h3>{trades_table([a for a in br['sell_list'] if a['usd'] >= min_usd], 'sell')}"
             f"<h3>📤 外部流出（クラスター外のアドレスへ）</h3>{trades_table([a for a in br['out_list'] + br['cash_out_list'] if a['usd'] >= min_usd], 'out')}"
-            f"<h3>📈 値動きの寄与（上位）</h3>{mv}{internal}</div>")
+            f"<h3>📈 値動きの寄与（上位）</h3>{mv}"
+            f"<h3>📋 銘柄ごとの枚数・単価・評価額（{esc(br['label0'])} → {esc(br['label1'])}、${min_usd:,.0f} 以上）</h3>{ptable}{internal}</div>")
 
 # ------------------------------------------------------------ 本体
 def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label, out_path, holdings_updated=None, timeline=None):
