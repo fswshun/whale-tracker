@@ -769,7 +769,7 @@ def html(holdings_doc):
     out = DOCS / ("index.dryrun.html" if DRY_RUN else "index.html")
     pts = P.cutoff_points(snapshots, n=45)
     bridges = [P.bridge(pts[i - 1], pts[i], events, CTX, MOVE_MIN_USD) for i in range(1, len(pts))]
-    timeline = {"points": pts, "bridges": bridges, "names": P.role_names(wallets), "ctx": CTX, "min_usd": MOVE_MIN_USD}
+    timeline = {"points": pts, "bridges": bridges, "names": P.role_names(wallets), "ctx": CTX, "min_usd": MOVE_MIN_USD, "buy_list_min_usd": float(CFG.get("buy_list_min_usd", 1000))}
     render(CFG, CHAINS, wallets, events, hd, batches(events), THRESHOLD, label, out, holdings_updated=upd, timeline=timeline)
     log("HTML 生成:", out)
 

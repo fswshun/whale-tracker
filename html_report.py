@@ -100,7 +100,7 @@ hit.addEventListener('pointermove',show);hit.addEventListener('pointerleave',fun
 """
 
 # ------------------------------------------------------------ 日ごとの増減パネル
-def bridge_panel(br, names, ctx, idx, min_usd):
+def bridge_panel(br, names, ctx, idx, min_usd, buy_min=1000.0):
     def who(w): return esc(names.get(w, "?"))
     def trades_table(rows, kind):
         if not rows: return "<div class='sub'>なし</div>"
@@ -154,7 +154,7 @@ def bridge_panel(br, names, ctx, idx, min_usd):
               + (f"<div class='sub'>ほか {len(pos) - 25} 銘柄（${min_usd:,.0f} 以上）</div>" if len(pos) > 25 else "")) if pos else "<div class='sub'>対象なし</div>"
     return (f"<div class='day' id='day-{idx}'{'' if idx == 0 else ' hidden'}>{head}<div class='bridge'>{grid}"
             f"<span class='k tot'>リスク資産の増減 合計</span><span class='tot'></span><span class='v tot {cls_delta(br['risk1'] - br['risk0'])}'>{P.fmt_usd(br['risk1'] - br['risk0'], True)}</span></div>"
-            f"<h3>🟢 買い（${min_usd:,.0f} 以上、金額＝支払った額）</h3>{trades_table([a for a in br['buy_list'] if a['value'] >= min_usd], 'buy')}"
+            f"<h3>🟢 買い（${buy_min:,.0f} 以上、金額＝支払った額。小さな買いも新規銘柄の手掛かりになるので閾値を低めに）</h3>{trades_table([a for a in br['buy_list'] if a['value'] >= buy_min], 'buy')}"
             f"<h3>🔻 利確 ＝ 売り（金額＝受け取った額）</h3>{trades_table([a for a in br['sell_list'] if a['value'] >= min_usd], 'sell')}"
             f"<h3>📤 外部流出（クラスター外のアドレスへ）</h3>{trades_table([a for a in br['out_list'] + br['cash_out_list'] if a['value'] >= min_usd], 'out')}"
             f"<h3>📈 値動きの寄与（上位）</h3>{mv}"
@@ -183,7 +183,7 @@ def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label,
     # --- 日ごとの増減 ---
     if bridges:
         tabs = "".join(f"<button class='tab' data-target='day-{i}' aria-selected='{'true' if i == 0 else 'false'}'>{esc(br['label1'])}</button>" for i, br in enumerate(reversed(bridges)))
-        panels = "".join(bridge_panel(br, names, ctx, i, min_usd) for i, br in enumerate(reversed(bridges)))
+        panels = "".join(bridge_panel(br, names, ctx, i, min_usd, float(tl.get("buy_list_min_usd") or 1000)) for i, br in enumerate(reversed(bridges)))
         days = f"<section class='panel'><h2>時点ごとの増減（値動き / 利確 / 買い に分解）</h2><div class='tabs'>{tabs}</div>{panels}</section>"
     else:
         days = "<section class='panel'><h2>時点ごとの増減</h2><div class='sub'>明日 9:00 JST の時点から、前日比の分解（値動き / 利確 / 買い）を表示します。</div></section>"
