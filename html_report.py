@@ -105,17 +105,17 @@ def bridge_panel(br, names, ctx, idx, min_usd, buy_min=1000.0):
     def who(w): return esc(names.get(w, "?"))
     def trades_table(rows, kind):
         if not rows: return "<div class='sub'>なし</div>"
-        head = {"buy": "<th>時刻(JST)</th><th>誰</th><th>銘柄</th><th class='r'>数量</th><th class='r'>金額</th><th>支払い</th><th>チェーン</th><th></th>",
-                "sell": "<th>時刻(JST)</th><th>誰</th><th>銘柄</th><th class='r'>数量</th><th class='r'>金額</th><th>受け取り</th><th>チェーン</th><th></th>",
-                "out": "<th>時刻(JST)</th><th>誰</th><th>銘柄</th><th class='r'>数量</th><th class='r'>金額</th><th>先</th><th>チェーン</th><th></th>"}[kind]
+        head = {"buy": "<th>時刻(JST)</th><th>誰</th><th>銘柄</th><th class='r'>数量</th><th class='r'>金額</th><th>支払い</th><th></th>",
+                "sell": "<th>時刻(JST)</th><th>誰</th><th>銘柄</th><th class='r'>数量</th><th class='r'>金額</th><th>受け取り</th><th></th>",
+                "out": "<th>時刻(JST)</th><th>誰</th><th>銘柄</th><th class='r'>数量</th><th class='r'>金額</th><th>先</th><th></th>"}[kind]
         body = ""
         for a in rows:
             link = P.dex_link(a["chain"], a["contract"], ctx); lk = f"<a href='{esc(link)}' target='_blank' rel='noopener'>DexScreener</a>" if link else ""
             other = "外部" if kind == "out" else P.other_leg_text(a)
             times = f" ×{a['n']}" if a["n"] > 1 else ""
             unit = f"<div class='sub'>${a['unit']:.4g}/枚</div>" if a.get("unit") else ""
-            body += (f"<tr class='{'buy' if kind == 'buy' else 'sell'}'><td>{jst(a['last'])}{esc(times)}</td><td>{who(a['wallet'])}</td><td>{esc(a['sym'])}</td>"
-                     f"<td class='r'>{esc(P.fmt_qty(a['amount']))}</td><td class='r'>{usd(a['value'])}{unit}</td><td class='w'>{esc(other)}</td><td>{esc(P.chain_name(a['chain'], ctx))}</td><td>{lk}</td></tr>")
+            body += (f"<tr class='{'buy' if kind == 'buy' else 'sell'}'><td>{jst(a['last'])}{esc(times)}</td><td>{who(a['wallet'])}</td><td>{esc(P.symc(a['sym'], a['chain']))}</td>"
+                     f"<td class='r'>{esc(P.fmt_qty(a['amount']))}</td><td class='r'>{usd(a['value'])}{unit}</td><td class='w'>{esc(other)}</td><td>{lk}</td></tr>")
         return f"<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
     risk0 = max(br["risk0"], 1.0); scale = max(abs(br["price"]), br["buys"], br["realized"], br["in"], abs(br["resid"]), abs(br.get("exec_cost", 0)), 1.0)
     def bar(v, color):
@@ -135,7 +135,7 @@ def bridge_panel(br, names, ctx, idx, min_usd, buy_min=1000.0):
     if br.get("approx"): head += "<div class='sub' style='color:var(--warn)'>※ 記録開始前の時点は、その後の取引を数量で逆算した推定値。当時の価格が不明なため 9/6 朝の価格で評価しており、この期間の「値動き」は含まれません。</div>"
     movers = [m for m in br["movers"] if abs(m["usd"]) >= min_usd][:8]
     mv = ("<table><thead><tr><th>銘柄</th><th class='r'>価格変化</th><th class='r'>寄与額</th><th class='r'>現在評価</th></tr></thead><tbody>" + "".join(
-        f"<tr><td>{esc(m['sym'])}</td><td class='r {cls_delta(m['pct'])}'>{m['pct']:+.1f}%</td><td class='r {cls_delta(m['usd'])}'>{P.fmt_usd(m['usd'], True)}</td><td class='r'>{usd(m['hold'])}</td></tr>" for m in movers) + "</tbody></table>") if movers else "<div class='sub'>大きな値動きなし</div>"
+        f"<tr><td>{esc(P.symc(m['sym'], m.get('chain', '')))}</td><td class='r {cls_delta(m['pct'])}'>{m['pct']:+.1f}%</td><td class='r {cls_delta(m['usd'])}'>{P.fmt_usd(m['usd'], True)}</td><td class='r'>{usd(m['hold'])}</td></tr>" for m in movers) + "</tbody></table>") if movers else "<div class='sub'>大きな値動きなし</div>"
     internal = ("<details><summary>内部移動（本体⇔子⇔孫、総資産は不変） " + str(len(br["internal"])) + " 件</summary><div class='sub'>" + "、".join(
         f"{jst(e['ts'])} {who(e['wallet'])}→{who(e['cp'])} {esc(e['token'])} {esc(P.fmt_qty(e['amount']))} ({usd(e.get('usd'))})" for e in br["internal"][:20]) + "</div></details>") if br["internal"] else ""
     # 銘柄ごとの前後比較
@@ -145,7 +145,7 @@ def bridge_panel(br, names, ctx, idx, min_usd, buy_min=1000.0):
         dq = x["amt1"] - x["amt0"]; dqs = f"<span class='{cls_delta(dq)}'>{'+' if dq > 0 else ''}{P.fmt_qty(dq) if dq else '±0'}</span>" if abs(dq) > 1e-9 else "<span class='mute'>±0</span>"
         ppct = ((x["px1"] / x["px0"] - 1) * 100) if (x["px0"] and x["px1"]) else None
         st = f" <span class='tag'>{x['status']}</span>" if x["status"] else ""
-        return (f"<tr><td>{esc(x['sym'])}{st}</td><td class='r'>{esc(P.fmt_qty(x['amt0']))} → {esc(P.fmt_qty(x['amt1']))}</td><td class='r'>{dqs}</td>"
+        return (f"<tr><td>{esc(P.symc(x['sym'], x['chain']))}{st}</td><td class='r'>{esc(P.fmt_qty(x['amt0']))} → {esc(P.fmt_qty(x['amt1']))}</td><td class='r'>{dqs}</td>"
                 f"<td class='r'>{pxs(x['px0'])} → {pxs(x['px1'])}</td><td class='r {cls_delta(ppct or 0)}'>{P.fmt_pct(ppct)}</td>"
                 f"<td class='r'>{usd(x['usd0'])} → {usd(x['usd1'])}</td><td class='r {cls_delta(x['usd1'] - x['usd0'])}'>{P.fmt_usd(x['usd1'] - x['usd0'], True)}</td>"
                 f"<td class='r {cls_delta(x['price_effect'])}'>{P.fmt_usd(x['price_effect'], True)}</td><td class='r {cls_delta(x['qty_effect'])}'>{P.fmt_usd(x['qty_effect'], True)}</td></tr>")
@@ -204,7 +204,7 @@ def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label,
             vs = f"<span class='{cls_delta(g['vs_prev_pct'])}'>{P.fmt_pct(g['vs_prev_pct'])}</span>" if g["vs_prev_pct"] is not None else "<span class='mute'>—</span>"
             path = " → ".join(f"{esc(l)} ${v:.4g}" for l, v in g["path"][-4:]) if g["path"] else ""
             sold = f"<div class='sub'>{g['sold_pct']:.0f}% 売却済（{usd(g['proceeds'])}）</div>" if g["sold_pct"] >= 1 else ""
-            return (f"<tr class='buy'><td>{esc(g['sym'])}<span class='tag'>{esc(P.chain_name(g['chain'], ctx))}</span><div class='sub'>{who}</div></td>"
+            return (f"<tr class='buy'><td>{esc(P.symc(g['sym'], g['chain']))}<div class='sub'>{who}</div></td>"
                     f"<td>{jst(g['first'])}<div class='sub'>{g['n']}回、最終 {jst(g['last'])[6:]}</div></td>"
                     f"<td class='r'>{esc(P.fmt_qty(g['qty']))}<div class='sub'>{usd(g['cost'])}</div></td>"
                     f"<td class='r'>${g['avg']:.4g}</td><td class='r'>{('$%.4g' % g['px']) if g['px'] else '—'}</td><td class='r'>{pnl}</td><td class='r'>{vs}</td>"
@@ -250,7 +250,7 @@ def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label,
                     else:
                         v = c["amt"]; d1 = (v - prev["amt"]) if prev else None; d0 = (v - first["amt"]) if (first and first is not c) else None
                         cells += f"<td class='r'>{esc(P.fmt_qty(v))}<div class='sub'>前日 {esc(dtxt(d1))} · 累計 {esc(dtxt(d0))}</div></td>"
-                body += f"<tr><td>{esc(r['sym'])}<span class='tag'>{esc(P.chain_name(r['chain'], ctx))}</span></td>{cells}</tr>"
+                body += f"<tr><td>{esc(P.symc(r['sym'], r['chain']))}</td>{cells}</tr>"
             return f"<div class='mode' id='mode-{mode}'{'' if mode == 'usd' else ' hidden'} style='overflow-x:auto'><table><thead><tr><th>銘柄</th>{head}</tr></thead><tbody>{body}</tbody></table></div>"
         matrix_html = ("<section class='panel'><h2>銘柄別の日次推移（各セルに 前日比 と 開始日からの累計 を表示。毎日 9:00 JST 時点）</h2>"
                        "<div class='tabs'><button class='tab mtab' data-target='mode-usd' aria-selected='true'>評価額</button><button class='tab mtab' data-target='mode-px' aria-selected='false'>単価</button><button class='tab mtab' data-target='mode-amt' aria-selected='false'>枚数</button></div>"
@@ -261,8 +261,8 @@ def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label,
     if cur:
         top = sorted([p for p in cur["pos"].values() if p["b"] == "risk"], key=lambda p: -p["usd"])[:15]
         keyed = sorted([(k, p) for k, p in cur["pos"].items() if p["b"] == "risk"], key=lambda kv: -kv[1]["usd"])[:15]
-        pos_rows = "<section class='panel'><h2>いま持っているリスク資産（クラスター合算・上位15）</h2><table><thead><tr><th>銘柄</th><th>チェーン</th><th class='r'>数量</th><th class='r'>単価</th><th class='r'>評価額</th><th class='r'>比率</th></tr></thead><tbody>" + "".join(
-            f"<tr><td>{esc(p['sym'])}</td><td>{esc(chains.get(k.split(':')[0], {}).get('name', k.split(':')[0]))}</td><td class='r'>{esc(P.fmt_qty(p['amt']))}</td><td class='r'>{('$%.4g' % p['px']) if p.get('px') else '—'}</td><td class='r'>{usd(p['usd'])}</td><td class='r'>{p['usd'] / cur['risk'] * 100:.1f}%</td></tr>" for k, p in keyed) + "</tbody></table></section>"
+        pos_rows = "<section class='panel'><h2>いま持っているリスク資産（クラスター合算・上位15）</h2><table><thead><tr><th>銘柄</th><th class='r'>数量</th><th class='r'>単価</th><th class='r'>評価額</th><th class='r'>比率</th></tr></thead><tbody>" + "".join(
+            f"<tr><td>{esc(P.symc(p['sym'], k.split(':')[0]))}</td><td class='r'>{esc(P.fmt_qty(p['amt']))}</td><td class='r'>{('$%.4g' % p['px']) if p.get('px') else '—'}</td><td class='r'>{usd(p['usd'])}</td><td class='r'>{p['usd'] / cur['risk'] * 100:.1f}%</td></tr>" for k, p in keyed) + "</tbody></table></section>"
     # --- 下段: 従来の台帳（折りたたみ） ---
     def who(w): return esc(names.get(w) or label(w))
     by_wallet = defaultdict(list)
@@ -274,13 +274,13 @@ def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label,
     for w in order:
         items = sorted(by_wallet.get(w, []), key=lambda x: -(x.get("usd") or 0)); tot = sum(x.get("usd") or 0 for x in items)
         big = [x for x in items if (x.get("usd") or 0) >= threshold]
-        rows = "".join(f"<div>{esc(x['sym'])}<span class='tag'>{chains[x['chain']]['name']}</span> {usd(x.get('usd'))} <span class='sub'>{num(x['amount'])}枚</span></div>" for x in big[:20])
+        rows = "".join(f"<div>{esc(P.symc(x['sym'], x['chain']))} {usd(x.get('usd'))} <span class='sub'>{num(x['amount'])}枚</span></div>" for x in big[:20])
         left.append(f"<div style='margin-bottom:10px'><b>{who(w)}</b> <span class='sub'>{usd(tot)}</span><div class='sub'>{rows}</div></div>")
     evs = sorted(events, key=lambda e: e["ts"], reverse=True)
     major = [e for e in evs if ((e.get("usd") or 0) >= threshold or e["kind"].startswith("新ウォレット")) and not e["kind"].startswith("売却")]
     erows = "".join(f"<tr class='{kcls(e['kind'])}'><td>{jst(e['ts'])}<span class='tag'>{chains[e['chain']]['name']}</span></td><td>{who(e['wallet'])}</td>"
-                    f"<td><span class='k {kcls(e['kind'])}'>{esc(e['kind'])}</span></td><td>{e['dir']}</td><td>{esc(e['token'])}</td><td class='r'>{num(e['amount'])}</td><td class='r'>{usd(e.get('usd'))}</td><td>{esc(e.get('cp_label') or '')}</td></tr>" for e in major[:200])
-    brows = "".join(f"<tr class='sell'><td>{jst(int(datetime.fromisoformat(b['start']).timestamp()))} – {b['end'][11:16]}</td><td>{who(b['wallet'])}</td><td>{esc(b['token'])}<span class='tag'>{chains[b['chain']]['name']}</span></td><td class='r'>{b['n']}</td><td class='r'>{num(b['amount'])}</td><td class='r'>{usd(b['usd'])}</td></tr>"
+                    f"<td><span class='k {kcls(e['kind'])}'>{esc(e['kind'])}</span></td><td>{e['dir']}</td><td>{esc(P.symc(e['token'], e['chain']))}</td><td class='r'>{num(e['amount'])}</td><td class='r'>{usd(e.get('usd'))}</td><td>{esc(e.get('cp_label') or '')}</td></tr>" for e in major[:200])
+    brows = "".join(f"<tr class='sell'><td>{jst(int(datetime.fromisoformat(b['start']).timestamp()))} – {b['end'][11:16]}</td><td>{who(b['wallet'])}</td><td>{esc(P.symc(b['token'], b['chain']))}</td><td class='r'>{b['n']}</td><td class='r'>{num(b['amount'])}</td><td class='r'>{usd(b['usd'])}</td></tr>"
                     for b in sorted(batch_list, key=lambda b: b["start"], reverse=True)[:60] if b["usd"] >= threshold)
     old = (f"<details class='old'><summary>詳細台帳（従来表示：ウォレット別保有・売却バッチ・主要イベント）</summary>"
            f"<div class='grid2' style='margin-top:10px'><section class='panel'><h2>ウォレット別保有（${threshold:,.0f} 以上）</h2>{''.join(left)}</section>"

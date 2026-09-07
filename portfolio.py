@@ -205,7 +205,7 @@ def bridge(p0, p1, events, ctx, min_usd=5000.0):
         q = s1["pos"].get(k)
         if q and q.get("px"):
             d = p["amt"] * (q["px"] - p["px"]); price += d
-            movers.append({"sym": p["sym"], "usd": d, "pct": (q["px"] / p["px"] - 1) * 100, "hold": q["usd"]})
+            movers.append({"sym": p["sym"], "chain": k.split(":")[0], "usd": d, "pct": (q["px"] / p["px"] - 1) * 100, "hold": q["usd"]})
     evs = [e for e in events if t0 < e["ts"] <= t1]
     buys = group_trades(evs, "buy", ctx); sells = group_trades(evs, "sell", ctx)
     outs = group_trades([e for e in evs if bucket_of(e["chain"], e["contract"], ctx) == "risk"], "out", ctx)
@@ -254,6 +254,9 @@ def dex_link(chain, contract, ctx):
     return DEX_URL.format(dex=dex, contract=contract) if dex and contract and contract != "native" else ""
 
 def chain_name(chain, ctx): return ctx["chains"].get(chain, {}).get("name", chain)
+CHAIN_SHORT = {"robinhood": "Robinhood", "bsc": "BSC", "solana": "Solana", "ethereum": "Ethereum", "base": "Base", "arbitrum": "Arbitrum"}
+def chain_short(chain): return CHAIN_SHORT.get(chain, chain)
+def symc(sym, chain): return f"{sym}（{chain_short(chain)}）"   # 銘柄名は常にチェーン付きで表示
 
 def buy_alert_lines(buys, names, ctx):
     lines = []
@@ -261,8 +264,8 @@ def buy_alert_lines(buys, names, ctx):
         who = names.get(a["wallet"], a["wallet"][:6]); t = jst(a["last"]).strftime("%m-%d %H:%M")
         times = f"、{a['n']}回" if a["n"] > 1 else ""
         unit = f"、平均 ${a['unit']:.4g}/枚" if a.get("unit") else ""
-        lines.append(f"🟢 買い  {who}  {a['sym']} {fmt_qty(a['amount'])} ≈ {fmt_usd(a['value'])}\n"
-                     f"   支払 {other_leg_text(a)}{times}{unit}  {t} JST  {chain_name(a['chain'], ctx)}")
+        lines.append(f"🟢 買い  {who}  {symc(a['sym'], a['chain'])} {fmt_qty(a['amount'])} ≈ {fmt_usd(a['value'])}\n"
+                     f"   支払 {other_leg_text(a)}{times}{unit}  {t} JST")
         q = ctx.get("quote")
         if q:
             px, liq = q(a["chain"], a["contract"])
@@ -280,13 +283,13 @@ def digest_text(br, names, ctx, title, pages="", max_items=4):
              + (f" / 誤差 {fmt_usd(br['resid'], True)}" if abs(br["resid"]) >= 0.02 * max(br["risk0"], 1) else ""))
     m = br.get("min_usd", 0); sells = [a for a in br["sell_list"] if a["value"] >= m]; outs = [a for a in br["out_list"] + br["cash_out_list"] if a["value"] >= m]; buys = [a for a in br["buy_list"] if a["value"] >= m]
     if sells:
-        L.append("🔻 利確: " + "、".join(f"{names.get(a['wallet'], '?')} {a['sym']} {fmt_qty(a['amount'])} → {other_leg_text(a)}" for a in sells[:max_items]))
+        L.append("🔻 利確: " + "、".join(f"{names.get(a['wallet'], '?')} {symc(a['sym'], a['chain'])} {fmt_qty(a['amount'])} → {other_leg_text(a)}" for a in sells[:max_items]))
     if outs:
-        L.append("📤 外部流出: " + "、".join(f"{names.get(a['wallet'], '?')} {a['sym']} {fmt_qty(a['amount'])} ({fmt_usd(a['value'])})" for a in outs[:max_items]))
+        L.append("📤 外部流出: " + "、".join(f"{names.get(a['wallet'], '?')} {symc(a['sym'], a['chain'])} {fmt_qty(a['amount'])} ({fmt_usd(a['value'])})" for a in outs[:max_items]))
     if buys:
-        L.append("🟢 買い: " + "、".join(f"{names.get(a['wallet'], '?')} {a['sym']} {fmt_qty(a['amount'])} ({fmt_usd(a['value'])})" for a in buys[:max_items]))
+        L.append("🟢 買い: " + "、".join(f"{names.get(a['wallet'], '?')} {symc(a['sym'], a['chain'])} {fmt_qty(a['amount'])} ({fmt_usd(a['value'])})" for a in buys[:max_items]))
     mv = [m for m in br["movers"] if abs(m["usd"]) >= 0.01 * max(br["risk0"], 1)][:max_items]
-    if mv: L.append("📈 値動き: " + "、".join(f"{m['sym']} {m['pct']:+.1f}% ({fmt_usd(m['usd'], True)})" for m in mv))
+    if mv: L.append("📈 値動き: " + "、".join(f"{symc(m['sym'], m.get('chain', ''))} {m['pct']:+.1f}% ({fmt_usd(m['usd'], True)})" for m in mv))
     if br["internal"]:
         L.append("↔ 内部移動: " + "、".join(f"{names.get(e['wallet'], '?')}→{names.get(e['cp'], '外')} {e['token']} {fmt_qty(e['amount'])}" for e in br["internal"][:3]))
     if pages and "<" not in pages: L.append(f"詳細: {pages}")
@@ -338,7 +341,7 @@ def new_positions_text(rows, names, max_items=8):
         who = "/".join(names.get(w, "?") for w in g["wallets"])
         pnl = fmt_pct(g["pnl_pct"]) if g["pnl_pct"] is not None else "価格なし"
         sold = f"、{g['sold_pct']:.0f}%売却済" if g["sold_pct"] >= 1 else ""
-        L.append(f"  {g['sym']} {pnl}（{who} 支払 {fmt_usd(g['cost'])}、平均 ${g['avg']:.4g} → いま ${g['px']:.4g}{sold}）" if g["px"] else f"  {g['sym']} 価格取得不可（支払 {fmt_usd(g['cost'])}）")
+        L.append(f"  {symc(g['sym'], g['chain'])} {pnl}（{who} 支払 {fmt_usd(g['cost'])}、平均 ${g['avg']:.4g} → いま ${g['px']:.4g}{sold}）" if g["px"] else f"  {symc(g['sym'], g['chain'])} 価格取得不可（支払 {fmt_usd(g['cost'])}）")
     return "\n".join(L)
 
 
