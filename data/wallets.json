@@ -33,7 +33,18 @@
     "chains": [
       "robinhood",
       "bsc",
-      "base"
+      "base",
+      "ethereum"
+    ]
+  },
+  "0xa7b5ca022774bd02842932e4358ddcbea0ccaade": {
+    "role": "曾孫",
+    "parent": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
+    "first_seen": "2026-09-07T22:41:47+00:00",
+    "chains": [
+      "ethereum",
+      "robinhood",
+      "bsc"
     ]
   }
 }
