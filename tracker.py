@@ -29,12 +29,20 @@ from pathlib import Path
 import requests
 import portfolio as P
 
-ROOT = Path(__file__).resolve().parent
+CODE_DIR = Path(__file__).resolve().parent
+ROOT = Path(os.getenv("WHALE_ROOT") or CODE_DIR).resolve()   # 設定・データ・docs の置き場（複数クジラ運用ではデータ用リポジトリ）
 DATA, DOCS = ROOT / "data", ROOT / "docs"
+def L(a):
+    """アドレス正規化: EVM(0x…)は小文字、Solana(base58)は大文字小文字を保持"""
+    a = a or ""
+    return a.lower() if a.startswith("0x") else a
+
 DATA.mkdir(exist_ok=True); DOCS.mkdir(exist_ok=True)
 
 CFG = json.load(open(ROOT / "config.json"))
 NODEREAL_KEY = os.getenv("NODEREAL_KEY", "")
+HELIUS_KEY = os.getenv("HELIUS_KEY", "")           # Solana 用（https://dashboard.helius.dev の無料キー）
+WHALE_NAME = os.getenv("WHALE_NAME", "")           # 複数クジラ運用時の名前（config.json の name でも可）
 BLOCKSCOUT_KEY = os.getenv("BLOCKSCOUT_KEY", "")   # 推奨。dev.blockscout.com の無料 PRO キー（proapi_…）。無いと各インスタンスの公開APIを叩き 429 になりやすい
 BLOCKSCOUT_PRO = "https://api.blockscout.com"
 TG_TOKEN, TG_CHAT = os.getenv("TG_TOKEN"), os.getenv("TG_CHAT")
@@ -52,7 +60,10 @@ CHAINS = {
                   "native": "ETH", "dex": "base", "wnative": "0x4200000000000000000000000000000000000006"},
     "arbitrum":  {"name": "Arbitrum", "provider": "blockscout", "base": "https://arbitrum.blockscout.com", "chain_id": 42161, "rpcs": ["https://arb1.arbitrum.io/rpc"],
                   "native": "ETH", "dex": "arbitrum", "wnative": "0x82af49447d8a07e3bd95bd0d56f35241523fbbe2"},
+    "solana":    {"name": "Solana", "provider": "helius", "rpc": "https://mainnet.helius-rpc.com/?api-key={key}", "api": "https://api.helius.xyz/v0",
+                  "native": "SOL", "dex": "solana", "wnative": "So11111111111111111111111111111111111111112"},
 }
+SOL_SYSTEM = "11111111111111111111111111111111"
 STABLES = {"USDC", "USDT", "USDG", "USD1", "DAI", "FDUSD", "BUSD"}
 # 本物のステーブルだけ $1 固定。偽 USDT 等のエアドロップ（アドレスポイズニング）を $ 換算しないための一覧
 KNOWN_STABLES = {
@@ -65,6 +76,7 @@ KNOWN_STABLES = {
     ("base", "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"),
     ("arbitrum", "0xaf88d065e77c8cc2239327c5edb3a432268e5831"), ("arbitrum", "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9"),
     ("robinhood", "0x5fc5360d0400a0fd4f2af552add042d716f1d168"),
+    ("solana", "EPjFWdd5AufqSSqeM4qBGDNeeQvFcZVxeQd9uumx8dqu"), ("solana", "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"),
 }
 MIN_LIQ_USD = 5000     # DexScreener の流動性がこれ未満のペアの価格は使わない（偽トークン・ゴミ価格対策）
 BUY_ALERT_USD = float(CFG.get("buy_alert_usd", 5000))        # 買いはこの額から即時 Telegram
@@ -83,7 +95,8 @@ DUST_USD = float(CFG.get("dust_usd", 50))                 # これ未満の受�
 INITIAL_LOOKBACK_H = float(CFG.get("initial_lookback_hours", 120))   # 初回・新ウォレット追加時の遡り時間（全チェーン）
 HOLDINGS_EVERY = int(CFG.get("holdings_every_n_runs", 4))            # 残高更新の間隔（実行回数）
 SECONDARY_EVERY = int(CFG.get("secondary_chains_every_n_runs", 4))   # 副次チェーン(ETH/Base/Arb)の取得間隔（実行回数）
-PRIMARY_CHAINS = set(CFG.get("primary_chains", ["robinhood", "bsc"]))    # 毎回取得するチェーン
+PRIMARY_CHAINS = set(CFG.get("primary_chains", ["robinhood", "bsc", "solana"]))    # 毎回取得するチェーン
+WHALE_NAME = WHALE_NAME or CFG.get("name", "")
 NOTIFY_MAX_AGE_H = float(CFG.get("notify_max_age_hours", 48))        # これより古いイベントは通知しない（初回バックフィル対策）
 CHILD_MAX_AGE_D = float(CFG.get("child_detect_max_age_days", 30))    # これより古い送金からは子ウォレットを起こさない
 SERVICE_PREFIX = re.compile(r"^0x00aa", re.I)
@@ -108,16 +121,17 @@ state = jload(DATA / "state.json", {"run_count": 0})
 pending_eoa = jload(DATA / "pending_eoa.json", [])  # EOA判定が取れなかった候補（次回再判定）
 events = [json.loads(l) for l in open(DATA / "events.jsonl")] if (DATA / "events.jsonl").exists() else []
 snapshots = P.load_snapshots(DATA / "snapshots.jsonl")   # クラスター合算の残高履歴（1時間ごと、7日超は日次）
-labels = {k.lower(): v for k, v in CFG.get("labels", {}).items()}
+token_meta = jload(DATA / "token_meta.json", {})          # "solana:mint" -> {symbol, decimals}（Solana はイベントにシンボルが無いため）
+labels = {L(k): v for k, v in CFG.get("labels", {}).items()}
 
 for a in CFG["main_wallets"]:
-    wallets.setdefault(a.lower(), {"role": "本体", "parent": None, "first_seen": None, "chains": []})
+    wallets.setdefault(L(a), {"role": "本体", "parent": None, "first_seen": None, "chains": []})
 
-def is_watched(a): return bool(a) and a.lower() in wallets
-def is_service(a): return bool(a) and (a.lower() in labels or bool(SERVICE_PREFIX.match(a)))
+def is_watched(a): return bool(a) and L(a) in wallets
+def is_service(a): return bool(a) and (L(a) in labels or bool(SERVICE_PREFIX.match(a)))
 def short(a): return a[:6] + "…" + a[-4:] if a else ""
 def label(a):
-    a = (a or "").lower()
+    a = L(a or "")
     if a in labels: return labels[a]
     if a in wallets: return f"{wallets[a]['role']} {short(a)}"
     if SERVICE_PREFIX.match(a): return f"0x00AA系サービス {short(a)}"
@@ -125,10 +139,10 @@ def label(a):
 def child_role(parent_role): return {"本体": "子", "子": "孫", "孫": "曾孫"}.get(parent_role, "子孫")
 BURN = {"0x0000000000000000000000000000000000000000", "0x000000000000000000000000000000000000dead", "0x0000000000000000000000000000000000000001",
         "0x00000000000000000000000000000000deadbeef", "0xdead000000000000000042069420694206942069"}
-def is_burn(a): return (a or "").lower() in BURN
+def is_burn(a): return L(a or "") in BURN
 def is_lookalike(a):
     """監視ウォレットと先頭6桁・末尾3桁が同じ別アドレス＝アドレスポイズニングの偽物"""
-    a = (a or "").lower()
+    a = L(a or "")
     return any(w != a and w[:6] == a[:6] and w[-3:] == a[-3:] for w in wallets)
 
 # ------------------------------------------------------------ HTTP 共通
@@ -218,13 +232,13 @@ def bs_rows(chain, addr, since_block):
     for t in tok:
         dec = int(t.get("tokenDecimal") or 18)
         rows.append(dict(chain=chain, tx=t["hash"], block=int(t["blockNumber"]), ts=int(t["timeStamp"]),
-                         frm=t["from"].lower(), to=(t.get("to") or "").lower(), token=t.get("tokenSymbol") or "?",
-                         contract=t["contractAddress"].lower(), amount=int(t["value"]) / 10 ** dec, native=False))
+                         frm=L(t["from"]), to=L(t.get("to") or ""), token=t.get("tokenSymbol") or "?",
+                         contract=L(t["contractAddress"]), amount=int(t["value"]) / 10 ** dec, native=False))
     for t in txs:
         if str(t.get("isError", "0")) == "1" or str(t.get("txreceipt_status", "1")) == "0": continue
         v = int(t.get("value") or 0); inp = t.get("input") or "0x"
         row = dict(chain=chain, tx=t["hash"], block=int(t["blockNumber"]), ts=int(t["timeStamp"]),
-                   frm=t["from"].lower(), to=(t.get("to") or "").lower(), token=CHAINS[chain]["native"],
+                   frm=L(t["from"]), to=L(t.get("to") or ""), token=CHAINS[chain]["native"],
                    contract="native", amount=v / 1e18, native=True,
                    method=(t.get("functionName") or t.get("methodId") or ""), is_contract_call=inp not in ("0x", ""))
         if v > 0 or row["is_contract_call"]: rows.append(row)
@@ -232,9 +246,9 @@ def bs_rows(chain, addr, since_block):
         v = int(t.get("value") or 0)
         if v > 0 and str(t.get("isError", "0")) != "1":
             rows.append(dict(chain=chain, tx=t.get("hash") or t.get("transactionHash"), block=int(t["blockNumber"]), ts=int(t["timeStamp"]),
-                             frm=t["from"].lower(), to=(t.get("to") or "").lower(), token=CHAINS[chain]["native"],
+                             frm=L(t["from"]), to=L(t.get("to") or ""), token=CHAINS[chain]["native"],
                              contract="native", amount=v / 1e18, native=True, internal=True))
-    senders = {t["hash"]: t["from"].lower() for t in txs}
+    senders = {t["hash"]: L(t["from"]) for t in txs}
     for r in rows: r["tx_from"] = senders.get(r["tx"])
     return rows
 
@@ -264,7 +278,7 @@ def bs_holdings(chain, addr):
         pages += 1
         for it in j["items"]:
             tk = it["token"]; dec = int(tk.get("decimals") or 18)
-            amt = int(it["value"]) / 10 ** dec; c = (tk.get("address") or tk.get("address_hash") or "").lower()
+            amt = int(it["value"]) / 10 ** dec; c = L(tk.get("address") or tk.get("address_hash") or "")
             if amt > 0 and c:
                 h[c] = {"symbol": tk.get("symbol") or "?", "amount": amt, "contract": c,
                         "price": float(tk["exchange_rate"]) if tk.get("exchange_rate") else None}
@@ -276,8 +290,8 @@ def bs_holdings(chain, addr):
         warn(f"{chain} v2 tokens 取得不可 → tokentx 差引で代用 {short(addr)}")
         net = defaultdict(float); meta = {}
         for t in bs_compat_all(chain, {"module": "account", "action": "tokentx", "address": addr, "startblock": 0, "endblock": 99999999, "sort": "asc"}) or []:
-            dec = int(t.get("tokenDecimal") or 18); k = t["contractAddress"].lower(); v = int(t["value"]) / 10 ** dec
-            net[k] += v if t["to"].lower() == addr.lower() else -v; meta[k] = t.get("tokenSymbol") or "?"
+            dec = int(t.get("tokenDecimal") or 18); k = L(t["contractAddress"]); v = int(t["value"]) / 10 ** dec
+            net[k] += v if L(t["to"]) == L(addr) else -v; meta[k] = t.get("tokenSymbol") or "?"
         for k, v in net.items():
             if v > 1e-9: h[k] = {"symbol": meta[k], "amount": v, "contract": k, "price": None}
     else:
@@ -301,8 +315,8 @@ def bs_reconcile_holdings(chain, addr, h, limit=25):
     """Blockscout の残高インデックスが欠落する銘柄（例: Base の O）を、tokentx の差引 → 価格あり → balanceOf で補完"""
     net = defaultdict(float); meta = {}
     for t in bs_compat_all(chain, {"module": "account", "action": "tokentx", "address": addr, "startblock": 0, "endblock": 99999999, "sort": "desc"}) or []:
-        dec = int(t.get("tokenDecimal") or 18); k = t["contractAddress"].lower(); v = int(t["value"]) / 10 ** dec
-        net[k] += v if t["to"].lower() == addr.lower() else -v; meta[k] = (t.get("tokenSymbol") or "?", dec)
+        dec = int(t.get("tokenDecimal") or 18); k = L(t["contractAddress"]); v = int(t["value"]) / 10 ** dec
+        net[k] += v if L(t["to"]) == L(addr) else -v; meta[k] = (t.get("tokenSymbol") or "?", dec)
     missing = [k for k, v in net.items() if v > 1e-6 and (k not in h or h[k]["amount"] <= 0)]
     if not missing: return
     prefetch_prices(chain, missing)
@@ -371,7 +385,7 @@ def nr_rows(chain, addr, from_block, to_block):
     rows, seen = [], set()
     for t in trs:
         if str(t.get("receiptsStatus", "1")) == "0": continue
-        cat = t.get("category"); frm = (t.get("from") or "").lower(); to = (t.get("to") or "").lower()
+        cat = t.get("category"); frm = L(t.get("from") or ""); to = L(t.get("to") or "")
         raw = t.get("value"); dec = hx(t.get("decimal")) if t.get("decimal") is not None else 18
         try: amount = hx(raw) / 10 ** dec if isinstance(raw, str) and raw.startswith("0x") else float(raw or 0)
         except Exception: amount = 0.0
@@ -380,7 +394,7 @@ def nr_rows(chain, addr, from_block, to_block):
         seen.add(key)
         base = dict(chain=chain, tx=t.get("hash"), block=hx(t.get("blockNum")) or 0, ts=nr_ts(t.get("blockTimeStamp") or t.get("blockTimestamp")), frm=frm, to=to, amount=amount)
         if cat == "20":
-            rows.append(dict(base, token=t.get("asset") or "?", contract=(t.get("contractAddress") or "").lower(), native=False))
+            rows.append(dict(base, token=t.get("asset") or "?", contract=L(t.get("contractAddress") or ""), native=False))
         elif cat == "internal":
             if amount > 0: rows.append(dict(base, token=CHAINS[chain]["native"], contract="native", native=True, internal=True))
         else:
@@ -390,11 +404,11 @@ def nr_rows(chain, addr, from_block, to_block):
         t = nr_rpc(chain, "eth_getTransactionByHash", [tx])
         if not isinstance(t, dict): continue
         for r in rows:
-            if r["tx"] == tx: r["tx_from"] = (t.get("from") or "").lower()
+            if r["tx"] == tx: r["tx_from"] = L(t.get("from") or "")
         inp = t.get("input") or "0x"
-        if (t.get("from") or "").lower() == addr.lower() and inp not in ("0x", ""):
+        if L(t.get("from") or "") == L(addr) and inp not in ("0x", ""):
             blk = hx(t.get("blockNumber")) or 0; ts = next((r["ts"] for r in rows if r["tx"] == tx), 0)
-            rows.append(dict(chain=chain, tx=tx, block=blk, ts=ts, frm=addr.lower(), to=(t.get("to") or "").lower(), token=CHAINS[chain]["native"],
+            rows.append(dict(chain=chain, tx=tx, block=blk, ts=ts, frm=L(addr), to=L(t.get("to") or ""), token=CHAINS[chain]["native"],
                              contract="native", amount=0.0, native=True, is_contract_call=True, method=inp[:10]))
     return rows
 
@@ -424,7 +438,7 @@ def nr_holdings(chain, addr):
         for d in det:
             dec = hx(d.get("tokenDecimals")) if d.get("tokenDecimals") is not None else 18
             amt = (hx(d.get("tokenBalance")) or 0) / 10 ** dec
-            c = (d.get("tokenAddress") or "").lower()
+            c = L(d.get("tokenAddress") or "")
             if amt > 0 and c: h[c] = {"symbol": d.get("tokenSymbol") or "?", "amount": amt, "contract": c, "price": None}
         if len(det) < 100 or page * 100 >= (hx(res.get("totalCount")) or 0): break
         page += 1
@@ -437,9 +451,111 @@ def nr_has_activity(chain, addr):
     trs = nr_transfers(chain, addr, max(0, latest - lb), latest)
     return None if trs is None else bool(trs)
 
+# ------------------------------------------------------------ Helius（Solana）
+_sym = {}   # (chain, contract) -> symbol（DexScreener/DAS から）
+def hl_rpc(method, params):
+    if not HELIUS_KEY: return None
+    time.sleep(0.12)
+    j = http_json("POST", CHAINS["solana"]["rpc"].format(key=HELIUS_KEY), json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
+    if not isinstance(j, dict): return None
+    if "error" in j: warn(f"solana {method}: {str(j['error'])[:120]}"); return None
+    return j.get("result")
+
+def hl_signatures(addr, until=None, min_ts=None, max_pages=10):
+    """新しい順の署名一覧。until（署名）より新しいもの、または min_ts より新しいもの"""
+    out, before = [], None
+    for _ in range(max_pages):
+        p = {"limit": 1000}
+        if until: p["until"] = until
+        if before: p["before"] = before
+        res = hl_rpc("getSignaturesForAddress", [addr, p])
+        if res is None: return None
+        if not res: break
+        for s in res:
+            if min_ts and (s.get("blockTime") or 0) < min_ts: return out
+            out.append(s)
+        if len(res) < 1000: break
+        before = res[-1]["signature"]
+    return out
+
+def hl_parse(sigs):
+    """Enhanced Transactions API で解析（100署名/回、100クレジット/回）"""
+    out = []
+    for i in range(0, len(sigs), 100):
+        j = http_json("POST", f"{CHAINS['solana']['api']}/transactions?api-key={HELIUS_KEY}", json={"transactions": sigs[i:i + 100]}, timeout=60)
+        if not isinstance(j, list): return None
+        out.extend(j); time.sleep(0.15)
+    return out
+
+def sym_of(chain, contract):
+    return _sym.get((chain, contract)) or (token_meta.get(f"{chain}:{contract}") or {}).get("symbol") or "?"
+
+def hl_rows(addr, parsed):
+    rows = []
+    for p in parsed:
+        if p.get("transactionError"): continue
+        ts = int(p.get("timestamp") or 0); sig = p.get("signature"); slot = int(p.get("slot") or 0); payer = p.get("feePayer") or ""
+        typ = p.get("type") or ""; src = p.get("source") or ""
+        for nt in p.get("nativeTransfers") or []:
+            f, t = nt.get("fromUserAccount") or "", nt.get("toUserAccount") or ""
+            if addr in (f, t) and (nt.get("amount") or 0) > 0:
+                rows.append(dict(chain="solana", tx=sig, block=slot, ts=ts, frm=f, to=t, token="SOL", contract="native", amount=nt["amount"] / 1e9, native=True, tx_from=payer))
+        for tt in p.get("tokenTransfers") or []:
+            f, t = tt.get("fromUserAccount") or "", tt.get("toUserAccount") or ""
+            if addr in (f, t) and (tt.get("tokenAmount") or 0) > 0:
+                mint = tt.get("mint") or ""
+                rows.append(dict(chain="solana", tx=sig, block=slot, ts=ts, frm=f, to=t, token=sym_of("solana", mint), contract=mint, amount=float(tt["tokenAmount"]), native=False, tx_from=payer))
+        if payer == addr and typ != "TRANSFER":
+            rows.append(dict(chain="solana", tx=sig, block=slot, ts=ts, frm=addr, to=src or typ, token="SOL", contract="native", amount=0.0, native=True, is_contract_call=True, method=typ, tx_from=payer))
+    return rows
+
+def fill_symbols(rows, budget=[20]):
+    """Solana 行の未解決シンボルを DexScreener（prefetch 済み）→ DAS getAsset で埋める"""
+    for r in rows:
+        if r["chain"] != "solana" or r["token"] != "?" or r["contract"] == "native": continue
+        s = sym_of("solana", r["contract"])
+        if s == "?" and budget[0] > 0:
+            budget[0] -= 1
+            res = hl_rpc("getAsset", {"id": r["contract"]})
+            if isinstance(res, dict):
+                ti = res.get("token_info") or {}; md = (res.get("content") or {}).get("metadata") or {}
+                s = ti.get("symbol") or md.get("symbol") or "?"
+                token_meta[f"solana:{r['contract']}"] = {"symbol": s, "decimals": ti.get("decimals")}
+        r["token"] = s
+
+def hl_holdings(addr):
+    h = {}
+    res = hl_rpc("getAssetsByOwner", {"ownerAddress": addr, "page": 1, "limit": 1000, "displayOptions": {"showFungible": True, "showNativeBalance": True}})
+    if not isinstance(res, dict): return h
+    nb = res.get("nativeBalance") or {}
+    if nb: h["native"] = {"symbol": "SOL", "amount": (nb.get("lamports") or 0) / 1e9, "contract": "native", "price": nb.get("price_per_sol")}
+    for it in res.get("items") or []:
+        if it.get("interface") not in ("FungibleToken", "FungibleAsset"): continue
+        ti = it.get("token_info") or {}; dec = int(ti.get("decimals") or 0); bal = ti.get("balance") or 0
+        amt = bal / 10 ** dec if dec else float(bal)
+        if amt <= 0: continue
+        mint = it.get("id"); sym = ti.get("symbol") or ((it.get("content") or {}).get("metadata") or {}).get("symbol") or "?"
+        pi = ti.get("price_info") or {}
+        h[mint] = {"symbol": sym, "amount": amt, "contract": mint, "price": pi.get("price_per_token")}
+        token_meta[f"solana:{mint}"] = {"symbol": sym, "decimals": dec}
+    return h
+
+def hl_is_contract(addr):
+    res = hl_rpc("getAccountInfo", [addr, {"encoding": "base64"}])
+    if res is None: return None
+    v = res.get("value")
+    if v is None: return False                       # 未作成アカウント＝ウォレット候補
+    return bool(v.get("executable")) or v.get("owner") != SOL_SYSTEM
+
+def hl_has_activity(addr):
+    sigs = hl_signatures(addr, min_ts=time.time() - INITIAL_LOOKBACK_H * 3600, max_pages=1)
+    return None if sigs is None else bool(sigs)
+
 # ------------------------------------------------------------ プロバイダ振り分け
 def provider(chain): return CHAINS[chain]["provider"]
-def chain_available(chain): return provider(chain) != "nodereal" or bool(NODEREAL_KEY)
+def chain_available(chain):
+    pv = provider(chain)
+    return (bool(NODEREAL_KEY) if pv == "nodereal" else bool(HELIUS_KEY) if pv == "helius" else True)
 
 def fetch_rows(chain, addr):
     """新規行を取得し (rows, new_cursor) を返す。失敗なら (None, None) でカーソルは進めない"""
@@ -453,6 +569,13 @@ def fetch_rows(chain, addr):
         rows = bs_rows(chain, addr, since)
         if rows is None: return None, None
         return rows, (max(r["block"] for r in rows) if rows else cursor.get(key, since - 1))
+    if provider(chain) == "helius":
+        sigs = hl_signatures(addr, until=cursor[key]) if key in cursor else hl_signatures(addr, min_ts=time.time() - INITIAL_LOOKBACK_H * 3600)
+        if sigs is None: return None, None
+        if not sigs: return [], cursor.get(key)
+        parsed = hl_parse([s["signature"] for s in sigs])
+        if parsed is None: return None, None
+        return hl_rows(addr, parsed), sigs[0]["signature"]        # カーソル＝最新の署名
     latest = nr_block_number(chain)
     if not latest: return None, None
     head = latest - NR_HEAD_MARGIN          # NodeReal のインデクサは先頭から数ブロック遅れる（"blockNum not reached" 対策）
@@ -465,18 +588,23 @@ def fetch_rows(chain, addr):
 
 def is_contract(chain, addr):
     for _ in range(2):
-        r = bs_is_contract(chain, addr) if provider(chain) == "blockscout" else nr_is_contract(chain, addr)
+        pv = provider(chain)
+        r = bs_is_contract(chain, addr) if pv == "blockscout" else hl_is_contract(addr) if pv == "helius" else nr_is_contract(chain, addr)
         if r is not None: return r
         time.sleep(2)
     return None
 
-def fetch_holdings(chain, addr): return bs_holdings(chain, addr) if provider(chain) == "blockscout" else nr_holdings(chain, addr)
-def has_activity(chain, addr): return bs_has_activity(chain, addr) if provider(chain) == "blockscout" else nr_has_activity(chain, addr)
+def fetch_holdings(chain, addr):
+    pv = provider(chain)
+    return bs_holdings(chain, addr) if pv == "blockscout" else hl_holdings(addr) if pv == "helius" else nr_holdings(chain, addr)
+def has_activity(chain, addr):
+    pv = provider(chain)
+    return bs_has_activity(chain, addr) if pv == "blockscout" else hl_has_activity(addr) if pv == "helius" else nr_has_activity(chain, addr)
 
 # ------------------------------------------------------------ 価格
 _px = {}                                                   # (chain, contract) -> price or None（この実行内のキャッシュ）
 _liq = {}                                                  # (chain, contract) -> DexScreener 流動性 USD
-CTX["quote"] = lambda ch, c: (_px.get((ch, (c or "").lower())), _liq.get((ch, (c or "").lower())))
+CTX["quote"] = lambda ch, c: (_px.get((ch, L(c or ""))), _liq.get((ch, L(c or ""))))
 price_cache = jload(DATA / "prices.json", {})              # "chain:contract" -> {"px": .., "ts": ..}（前回価格。API 不調時の保険）
 
 def _pair_price(p):
@@ -493,7 +621,7 @@ def _set_px(chain, contract, px, fetched=True):
 
 def prefetch_prices(chain, contracts):
     """DexScreener の tokens/v1 は 30 アドレスまで一括可。呼び出し回数を減らすため先にまとめて取る"""
-    need = sorted({(c or "").lower() for c in contracts if c and c != "native" and (chain, (c or "").lower()) not in _px})
+    need = sorted({L(c or "") for c in contracts if c and c != "native" and (chain, L(c or "")) not in _px})
     for i in range(0, len(need), 30):
         chunk = need[i:i + 30]; cs = set(chunk)
         j = http_json("GET", f"https://api.dexscreener.com/tokens/v1/{CHAINS[chain]['dex']}/{','.join(chunk)}", retries=3)
@@ -502,24 +630,24 @@ def prefetch_prices(chain, contracts):
             continue
         best = {}
         for p in j:
-            addr = ((p.get("baseToken") or {}).get("address") or "").lower()
+            addr = L((p.get("baseToken") or {}).get("address") or "")
             if addr in cs:
                 liq, px = _pair_price(p)
-                if addr not in best or liq > best[addr][0]: best[addr] = (liq, px)
+                if addr not in best or liq > best[addr][0]: best[addr] = (liq, px); _sym[(chain, addr)] = (p.get("baseToken") or {}).get("symbol") or _sym.get((chain, addr))
         for c in chunk: _set_px(chain, c, best.get(c, (0, None))[1]); _liq[(chain, c)] = best.get(c, (0, None))[0]
         time.sleep(0.3)
 
 def price(chain, symbol, contract):
     mp = CFG.get("manual_prices", {})
     if symbol in mp: return float(mp[symbol])
-    if symbol in STABLES and (chain, (contract or "").lower()) in KNOWN_STABLES: return 1.0
+    if symbol in STABLES and (chain, L(contract or "")) in KNOWN_STABLES: return 1.0
     c = CHAINS[chain]
     if contract == "native":
         if c.get("wnative"): chain, contract = chain, c["wnative"]
         elif c.get("native_ref"): chain, contract = c["native_ref"]
         else: return None
     if not contract: return None
-    contract = contract.lower(); key = (chain, contract)
+    contract = L(contract); key = (chain, contract)
     if key in _px: return _px[key]
     j = http_json("GET", f"https://api.dexscreener.com/tokens/v1/{CHAINS[chain]['dex']}/{contract}", retries=2)
     if not isinstance(j, list): _set_px(chain, contract, None, fetched=False); return _px[key]
@@ -626,6 +754,7 @@ def run():
             if rows is None: warn(f"{ch} {short(w)}: 取得失敗（次回に持ち越し）"); continue
             if rows and ch not in wallets[w]["chains"]: wallets[w]["chains"].append(ch)
             prefetch_prices(ch, [r["contract"] for r in rows if not r["native"]] + ([CHAINS[ch]["wnative"]] if CHAINS[ch].get("wnative") else []))
+            if ch == "solana": fill_symbols(rows)
             by_tx = defaultdict(list)
             for r in rows: by_tx[r["tx"]].append(r)
             n_new = 0
@@ -692,6 +821,7 @@ def run():
         json.dump(holdings_doc, open(DATA / "holdings.json", "w"), indent=2, ensure_ascii=False)
         json.dump(price_cache, open(DATA / "prices.json", "w"))
         P.save_snapshots(DATA / "snapshots.jsonl", snapshots)
+        json.dump(token_meta, open(DATA / "token_meta.json", "w"), ensure_ascii=False)
     return new_events, holdings_doc
 
 # ------------------------------------------------------------ 集計（バッチ・比率）
@@ -719,6 +849,7 @@ def main_holding_of(contract, holdings):
 
 # ------------------------------------------------------------ Telegram
 def tg(text):
+    if WHALE_NAME: text = f"[{WHALE_NAME}] " + text
     if DRY_RUN: log("[DRY_RUN] Telegram:\n" + text); return
     if not (TG_TOKEN and TG_CHAT): warn("TG_TOKEN/TG_CHAT 未設定のため通知スキップ"); return
     for i in range(0, len(text), 3800):
@@ -780,11 +911,13 @@ def html(holdings_doc):
             if g["px"]: g["pnl_pct"] = (g["px"] / g["avg"] - 1) * 100; g["value"] = g["held"] * g["px"]
     matrix = P.token_matrix(snapshots, CTX, top_n=int(CFG.get("matrix_top_n", 20)), extra_keys=[g["key"] for g in newpos])
     timeline = {"points": pts, "bridges": bridges, "names": P.role_names(wallets), "ctx": CTX, "min_usd": MOVE_MIN_USD, "buy_list_min_usd": float(CFG.get("buy_list_min_usd", 1000)), "new_positions": newpos, "matrix": matrix}
+    timeline["name"] = WHALE_NAME
     render(CFG, CHAINS, wallets, events, hd, batches(events), THRESHOLD, label, out, holdings_updated=upd, timeline=timeline)
     log("HTML 生成:", out)
 
 if __name__ == "__main__":
     if not NODEREAL_KEY: warn("NODEREAL_KEY 未設定（BSC は取得できません）")
+    if not HELIUS_KEY: warn("HELIUS_KEY 未設定（Solana は取得できません）")
     if not BLOCKSCOUT_KEY: warn("BLOCKSCOUT_KEY 未設定（公開インスタンスの API を使うため 429 が出やすくなります）")
     if DRY_RUN: log("DRY_RUN: 通知・保存なし")
     new_events, holdings_doc = run()

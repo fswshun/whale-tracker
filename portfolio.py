@@ -14,6 +14,10 @@ import json
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 
+def L(a):
+    """アドレス正規化: EVM(0x…)は小文字、Solana(base58)は大文字小文字を保持"""
+    a = a or ""
+    return a.lower() if a.startswith("0x") else a
 JST = timezone(timedelta(hours=9))
 DAY = 86400
 ROLE_ORDER = {"本体": 0, "子": 1, "孫": 2, "曾孫": 3}
@@ -53,10 +57,10 @@ def role_names(wallets):
 
 # ------------------------------------------------------------ 分類
 def bucket_of(chain, contract, ctx):
-    c = (contract or "").lower()
+    c = L(contract or "")
     if c == "native": return "quasi"
     ch = ctx["chains"].get(chain, {})
-    if c and c == (ch.get("wnative") or "").lower(): return "quasi"
+    if c and c == L(ch.get("wnative") or ""): return "quasi"
     if (chain, c) in ctx["known_stables"]: return "cash"
     return "risk"
 
@@ -103,7 +107,7 @@ def reconstruct_backwards(snap, events, target_ts, ctx):
     for e in evs:
         f = flow_of(e, ctx)
         if f in ("internal", "noise"): continue
-        k = f"{e['chain']}:{(e['contract'] or '').lower()}"
+        k = f"{e['chain']}:{L(e['contract'] or '')}"
         if k not in pos:
             b = bucket_of(e["chain"], e["contract"], ctx)
             if b == "risk" and not e.get("price"): continue
@@ -170,8 +174,8 @@ def group_trades(evs, flow_sel, ctx, min_usd=0.0):
     for (w, tx), legs in by_tx.items():
         for e in legs:
             if flow_of(e, ctx) != flow_sel: continue
-            key = (w, e["chain"], (e["contract"] or "").lower())
-            a = agg.setdefault(key, {"wallet": w, "chain": e["chain"], "contract": (e["contract"] or "").lower(), "sym": e["token"], "amount": 0.0, "usd": 0.0,
+            key = (w, e["chain"], L(e["contract"] or ""))
+            a = agg.setdefault(key, {"wallet": w, "chain": e["chain"], "contract": L(e["contract"] or ""), "sym": e["token"], "amount": 0.0, "usd": 0.0,
                                      "counter_usd": 0.0, "n": 0, "other": defaultdict(float), "first": e["ts"], "last": e["ts"], "funding": 0.0, "note": ""})
             a["amount"] += e["amount"]; a["usd"] += e.get("usd") or 0.0; a["n"] += 1
             a["first"] = min(a["first"], e["ts"]); a["last"] = max(a["last"], e["ts"])
@@ -206,7 +210,7 @@ def bridge(p0, p1, events, ctx, min_usd=5000.0):
     buys = group_trades(evs, "buy", ctx); sells = group_trades(evs, "sell", ctx)
     outs = group_trades([e for e in evs if bucket_of(e["chain"], e["contract"], ctx) == "risk"], "out", ctx)
     ins = group_trades([e for e in evs if bucket_of(e["chain"], e["contract"], ctx) == "risk" and (e.get("usd") or 0) >= min_usd
-                        and f"{e['chain']}:{(e['contract'] or '').lower()}" in s1["pos"]], "in", ctx)
+                        and f"{e['chain']}:{L(e['contract'] or '')}" in s1["pos"]], "in", ctx)
     cash_outs = group_trades([e for e in evs if bucket_of(e["chain"], e["contract"], ctx) != "risk" and e["kind"] in ("外部へ送金", "バーン")], "out", ctx)
     internal = [e for e in evs if flow_of(e, ctx) == "internal" and e["dir"] == "OUT" and (e.get("usd") or 0) >= min_usd]
     B_val, S_val = sum(a["usd"] for a in buys), sum(a["usd"] for a in sells)          # 銘柄側の時価（リスク資産に入った/出た額）

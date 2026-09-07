@@ -1,0 +1,44 @@
+name: whale-tracker
+# クジラごとのデータ用リポジトリに置くワークフロー。コードは fswshun/whale-tracker から毎回取得する（修正が全員に自動で行き渡る）
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: tracker
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: fswshun/whale-tracker
+          path: code
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r code/requirements.txt
+      - name: 取得・通知・HTML生成
+        env:
+          WHALE_ROOT: ${{ github.workspace }}
+          NODEREAL_KEY: ${{ secrets.NODEREAL_KEY }}
+          BLOCKSCOUT_KEY: ${{ secrets.BLOCKSCOUT_KEY }}
+          HELIUS_KEY: ${{ secrets.HELIUS_KEY }}
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT: ${{ secrets.TG_CHAT }}
+        run: python code/tracker.py
+      - name: 結果をコミット
+        if: always()
+        run: |
+          rm -rf code
+          git config user.name "whale-tracker-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add data docs config.json
+          if git diff --cached --quiet; then echo "変更なし"; exit 0; fi
+          git commit -m "track $(date -u +'%Y-%m-%d %H:%M')"
+          git pull --rebase origin "$GITHUB_REF_NAME" || true
+          git push

@@ -35,6 +35,7 @@
 2. リポジトリの **Settings → Secrets and variables → Actions** に以下を登録
    | Secret | 内容 |
    |---|---|
+   | `HELIUS_KEY` | Solana 用。https://dashboard.helius.dev で無料登録 → API Key（Mainnet） |
    | `NODEREAL_KEY` | https://dashboard.nodereal.io で無料登録 → API Key を作成（BNB Chain / mainnet）→ URL `https://bsc-mainnet.nodereal.io/v1/<ここ>` の `<ここ>` 部分 |
    | `BLOCKSCOUT_KEY` | https://dev.blockscout.com で無料登録 → Create API Key → `proapi_…` で始まるキー（表示は1回だけ） |
    | `TG_TOKEN` | Telegram の @BotFather で `/newbot` して得るトークン |
@@ -51,6 +52,22 @@ NODEREAL_KEY=xxxx BLOCKSCOUT_KEY=proapi_xxxx DRY_RUN=1 python tracker.py
 ```
 
 `DRY_RUN=1` は通知もファイル保存もせず、通知文をコンソールに出し `docs/index.dryrun.html` を作ります。
+
+## 複数のクジラを追う（1人＝1リポジトリ）
+
+コードはこのリポジトリ1つ。クジラごとに **データ用リポジトリ**（`whale-<name>`：config.json / data / docs / ワークフロー）を持ち、ワークフローが毎回このリポジトリのコードを取得して実行します。修正はここに push すれば全員に行き渡ります。
+
+- 立ち上げ: `python whale_repo/setup_whale.py --name unipcs --wallet 0x… --wallet <Solanaアドレス> --blockscout proapi_… --helius … --nodereal … --tg-token … --tg-chat … --gh-token ghp_…`（リポ作成 → push → Secrets → Pages → 初回実行まで自動）
+- API キーはクジラごとに別アカウントで取得すると無料枠が人数分になる（Blockscout PRO 10万credits/日、NodeReal 1,000万CU/月、Helius 100万credits/月）
+- Telegram は同じボット・同じチャットに `[name]` を頭に付けて送る（`config.json` の `name`）
+- ローカル確認: `WHALE_ROOT=/path/to/whale-unipcs DRY_RUN=1 python tracker.py`
+
+## Solana
+
+- データ源は Helius（`HELIUS_KEY`、無料 100万credits/月・10 req/s）。署名一覧（1 credit）で新規 tx を検知し、新規分だけ Enhanced Transactions API（100 credits/回、100署名まで）で解析。残高は DAS `getAssetsByOwner`（10 credits）
+- スワップ・送金・子ウォレット検出（SOL の種銭）・なりすまし判定（署名者≠本人）は EVM と同じロジック
+- 準現金＝SOL/WSOL、現金＝USDC/USDT（本物のミントのみ）、価格は DexScreener の `solana`
+- Solana アドレスは大文字小文字を区別するので、コード内では EVM だけ小文字化（`L()`）
 
 ## ファイル
 

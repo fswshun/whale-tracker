@@ -283,8 +283,8 @@ def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label,
              "<p>値動き＝前時点の保有数量 × 価格差。利確＝リスク資産を売って受け取った額（ETH・USDC・別銘柄）＋クラスター外へ送った額。買い＝リスク資産を買うのに支払った額（スワップ・クロスチェーン購入）。約定コスト＝支払った額と受け取った銘柄の時価の差（流動性の薄い銘柄を大量に買うと大きくなる）。誤差＝この分解で説明できない残り（エアドロップ、価格取得漏れなど）。</p>"
              "<p>本体・子・孫の間の移動は総資産を変えないので内部移動として折りたたみ。$5,000 未満の動きは集計には含むが一覧には出さない。</p></div></section>")
     doc = f"""<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>クジラ資産レポート</title><style>{CSS}</style></head><body>
-<header><h1>クジラ資産レポート <small>本体 {sum(1 for w in wallets if wallets[w]['role'] == '本体')} ＋ 自動検出 {sum(1 for w in wallets if wallets[w]['role'] != '本体')} ウォレット</small></h1>
+<title>{esc(tl.get("name") or "クジラ")} 資産レポート</title><style>{CSS}</style></head><body>
+<header><h1>{esc(tl.get("name") or "クジラ")} 資産レポート <small>本体 {sum(1 for w in wallets if wallets[w]['role'] == '本体')} ＋ 自動検出 {sum(1 for w in wallets if wallets[w]['role'] != '本体')} ウォレット</small></h1>
 <div class="sub">更新 {P.jst(int(now.timestamp())).strftime('%m-%d %H:%M')} JST（15分ごと）</div></header>
 <main>{hero}{newpos_html}{chart}{matrix_html}{days}{pos_rows}{rules}{old}</main><script>{CHART_JS}</script></body></html>"""
     out_path.write_text(doc, encoding="utf-8")
