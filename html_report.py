@@ -183,6 +183,7 @@ def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label,
                 f"<div class='tile'><div class='v'>{P.fmt_usd(cur['quasi'])}</div><div class='lbl'>準現金（ETH・BNB）</div></div>"
                 f"<div class='tile'><div class='v'>{P.fmt_usd(cur['cash'])}</div><div class='lbl'>現金（ステーブル）</div></div>"
                 f"<div class='tile'><div class='v'>{n_w}</div><div class='lbl'>監視ウォレット</div></div></div>"
+                f"<div class='sub' style='width:100%'>本体アドレス: " + "　".join(f"<code style='font-size:12px'>{esc(a)}</code>（{'Solana' if not a.startswith('0x') else 'EVM'}）" for a in cfg.get("main_wallets", [])) + "</div>"
                 f"<div class='sub' style='width:100%'>チェーン別: {chain_breakdown(cur, chains)}</div>"
                 f"<div class='sub' style='width:100%'>残高時点 {jst(cur['ts'])} JST　評価は DexScreener/Blockscout の現在値（流動性の薄い銘柄は実際に売れる額より大きく出ます）</div></section>")
     else:
