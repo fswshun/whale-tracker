@@ -161,6 +161,12 @@ def bridge_panel(br, names, ctx, idx, min_usd, buy_min=1000.0):
             f"<h3>📈 値動きの寄与（上位）</h3>{mv}"
             f"<h3>📋 銘柄ごとの枚数・単価・評価額（{esc(br['label0'])} → {esc(br['label1'])}、${min_usd:,.0f} 以上）</h3>{ptable}{internal}</div>")
 
+def chain_breakdown(snap, chains):
+    by = defaultdict(float)
+    for k, p in snap["pos"].items(): by[k.split(":")[0]] += p["usd"]
+    parts = [f"{esc(chains.get(c, {}).get('name', c))} <b>{P.fmt_usd(v)}</b>" for c, v in sorted(by.items(), key=lambda kv: -kv[1]) if v >= 1]
+    return "　".join(parts) if parts else "—"
+
 # ------------------------------------------------------------ 本体
 def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label, out_path, holdings_updated=None, timeline=None):
     now = datetime.now(timezone.utc)
@@ -177,6 +183,7 @@ def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label,
                 f"<div class='tile'><div class='v'>{P.fmt_usd(cur['quasi'])}</div><div class='lbl'>準現金（ETH・BNB）</div></div>"
                 f"<div class='tile'><div class='v'>{P.fmt_usd(cur['cash'])}</div><div class='lbl'>現金（ステーブル）</div></div>"
                 f"<div class='tile'><div class='v'>{n_w}</div><div class='lbl'>監視ウォレット</div></div></div>"
+                f"<div class='sub' style='width:100%'>チェーン別: {chain_breakdown(cur, chains)}</div>"
                 f"<div class='sub' style='width:100%'>残高時点 {jst(cur['ts'])} JST　評価は DexScreener/Blockscout の現在値（流動性の薄い銘柄は実際に売れる額より大きく出ます）</div></section>")
     else:
         hero = "<section class='panel hero'><div class='sub'>残高スナップショットがまだありません。次回の実行で作成されます。</div></section>"
@@ -253,8 +260,9 @@ def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label,
     pos_rows = ""
     if cur:
         top = sorted([p for p in cur["pos"].values() if p["b"] == "risk"], key=lambda p: -p["usd"])[:15]
-        pos_rows = "<section class='panel'><h2>いま持っているリスク資産（クラスター合算・上位15）</h2><table><thead><tr><th>銘柄</th><th class='r'>数量</th><th class='r'>単価</th><th class='r'>評価額</th><th class='r'>比率</th></tr></thead><tbody>" + "".join(
-            f"<tr><td>{esc(p['sym'])}</td><td class='r'>{esc(P.fmt_qty(p['amt']))}</td><td class='r'>{('$%.4g' % p['px']) if p.get('px') else '—'}</td><td class='r'>{usd(p['usd'])}</td><td class='r'>{p['usd'] / cur['risk'] * 100:.1f}%</td></tr>" for p in top) + "</tbody></table></section>"
+        keyed = sorted([(k, p) for k, p in cur["pos"].items() if p["b"] == "risk"], key=lambda kv: -kv[1]["usd"])[:15]
+        pos_rows = "<section class='panel'><h2>いま持っているリスク資産（クラスター合算・上位15）</h2><table><thead><tr><th>銘柄</th><th>チェーン</th><th class='r'>数量</th><th class='r'>単価</th><th class='r'>評価額</th><th class='r'>比率</th></tr></thead><tbody>" + "".join(
+            f"<tr><td>{esc(p['sym'])}</td><td>{esc(chains.get(k.split(':')[0], {}).get('name', k.split(':')[0]))}</td><td class='r'>{esc(P.fmt_qty(p['amt']))}</td><td class='r'>{('$%.4g' % p['px']) if p.get('px') else '—'}</td><td class='r'>{usd(p['usd'])}</td><td class='r'>{p['usd'] / cur['risk'] * 100:.1f}%</td></tr>" for k, p in keyed) + "</tbody></table></section>"
     # --- 下段: 従来の台帳（折りたたみ） ---
     def who(w): return esc(names.get(w) or label(w))
     by_wallet = defaultdict(list)
