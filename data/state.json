@@ -216,8 +216,8 @@
       "contract": "0x48bcbbc6ca67166bc7f87d172118057ad6cdc3da",
       "sym": "UPS",
       "amount": 1128628.3320795435,
-      "usd": 194.57552445051329,
-      "counter_usd": 496.474,
+      "usd": 121.89185986459069,
+      "counter_usd": 498.858,
       "n": 2,
       "other": {
         "ETH": 0.2
@@ -227,8 +227,8 @@
       "runs": 1,
       "funding": 0.0,
       "note": "",
-      "value": 496.474,
-      "unit": 0.000439891491191991
+      "value": 498.858,
+      "unit": 0.00044200378975143564
     },
     "robinhood:0x48bcbbc6ca67166bc7f87d172118057ad6cdc3da:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
       "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
@@ -236,8 +236,8 @@
       "contract": "0x48bcbbc6ca67166bc7f87d172118057ad6cdc3da",
       "sym": "UPS",
       "amount": 1128643.2119419996,
-      "usd": 194.5780897388007,
-      "counter_usd": 496.474,
+      "usd": 121.89346688973595,
+      "counter_usd": 498.858,
       "n": 2,
       "other": {
         "ETH": 0.2
@@ -247,8 +247,48 @@
       "runs": 1,
       "funding": 0.0,
       "note": "",
-      "value": 496.474,
-      "unit": 0.00043988569172869266
+      "value": 498.858,
+      "unit": 0.0004419979624399106
+    },
+    "robinhood:0x5f4e5f80798125d04ca9f9a2cc5c08cb619b1e47:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
+      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
+      "chain": "robinhood",
+      "contract": "0x5f4e5f80798125d04ca9f9a2cc5c08cb619b1e47",
+      "sym": "ELIZABAO",
+      "amount": 1190311.6610645433,
+      "usd": 372.6865810793085,
+      "counter_usd": 249.429,
+      "n": 2,
+      "other": {
+        "ETH": 0.1
+      },
+      "first": 1788882311,
+      "last": 1788882313,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 249.429,
+      "unit": 0.00020954932070221482
+    },
+    "robinhood:0x5f4e5f80798125d04ca9f9a2cc5c08cb619b1e47:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
+      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
+      "chain": "robinhood",
+      "contract": "0x5f4e5f80798125d04ca9f9a2cc5c08cb619b1e47",
+      "sym": "ELIZABAO",
+      "amount": 1231740.3835699107,
+      "usd": 385.65791409573905,
+      "counter_usd": 249.429,
+      "n": 2,
+      "other": {
+        "ETH": 0.1
+      },
+      "first": 1788882311,
+      "last": 1788882313,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 249.429,
+      "unit": 0.0002025012765085192
     }
   },
   "last_daily_cut": 1788879600
