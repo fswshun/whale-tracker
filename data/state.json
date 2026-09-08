@@ -655,6 +655,86 @@
       "note": "",
       "value": 748.3409999999999,
       "unit": 9.127974985685116e-05
+    },
+    "robinhood:0x4631413c4026169194768c8e2a1e5a1d8d7398e5:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
+      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
+      "chain": "robinhood",
+      "contract": "0x4631413c4026169194768c8e2a1e5a1d8d7398e5",
+      "sym": "ALPHY",
+      "amount": 4039882.9380129552,
+      "usd": 258.87569866787015,
+      "counter_usd": 496.644,
+      "n": 1,
+      "other": {
+        "ETH": 0.2
+      },
+      "first": 1788893560,
+      "last": 1788893560,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 496.644,
+      "unit": 0.00012293524530794395
+    },
+    "robinhood:0x4631413c4026169194768c8e2a1e5a1d8d7398e5:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
+      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
+      "chain": "robinhood",
+      "contract": "0x4631413c4026169194768c8e2a1e5a1d8d7398e5",
+      "sym": "ALPHY",
+      "amount": 4301282.396494785,
+      "usd": 275.62617596738585,
+      "counter_usd": 496.644,
+      "n": 1,
+      "other": {
+        "ETH": 0.2
+      },
+      "first": 1788893560,
+      "last": 1788893560,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 496.644,
+      "unit": 0.00011546416957062077
+    },
+    "robinhood:0x3ba500f1ababbcf0f0247d06d1c56fd7e6c4c09d:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
+      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
+      "chain": "robinhood",
+      "contract": "0x3ba500f1ababbcf0f0247d06d1c56fd7e6c4c09d",
+      "sym": "?",
+      "amount": 1068625.7326604456,
+      "usd": 268.33192147103784,
+      "counter_usd": 248.322,
+      "n": 1,
+      "other": {
+        "ETH": 0.1
+      },
+      "first": 1788893855,
+      "last": 1788893855,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 248.322,
+      "unit": 0.00023237508924829904
+    },
+    "robinhood:0x3ba500f1ababbcf0f0247d06d1c56fd7e6c4c09d:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
+      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
+      "chain": "robinhood",
+      "contract": "0x3ba500f1ababbcf0f0247d06d1c56fd7e6c4c09d",
+      "sym": "?",
+      "amount": 1186723.403772007,
+      "usd": 297.9862466871509,
+      "counter_usd": 248.322,
+      "n": 1,
+      "other": {
+        "ETH": 0.1
+      },
+      "first": 1788893854,
+      "last": 1788893854,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 248.322,
+      "unit": 0.00020925010765837022
     }
   },
   "last_daily_cut": 1788879600
