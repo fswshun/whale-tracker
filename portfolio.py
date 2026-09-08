@@ -49,6 +49,7 @@ def fmt_usd(v, signed=False):
     return s + body
 def fmt_qty(v):
     a = abs(v)
+    if a >= 1e16: return f"{v:.3g}枚"          # 異常供給トークン（1e28 枚など）は指数表記
     if a >= 1e8: return f"{v / 1e8:,.2f}億枚"
     if a >= 1e4: return f"{v / 1e4:,.1f}万枚".replace(".0万", "万")
     if a >= 1000: return f"{v:,.0f}枚"

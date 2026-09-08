@@ -741,6 +741,7 @@ def has_activity(chain, addr):
 # ------------------------------------------------------------ 価格
 _px = {}                                                   # (chain, contract) -> price or None（この実行内のキャッシュ）
 _liq = {}                                                  # (chain, contract) -> DexScreener 流動性 USD
+_mcap = {}                                                 # (chain, contract) -> (時価総額, FDV)。評価の妥当性チェック用
 _created = {}                                              # (chain, contract) -> ペア作成時刻 (epoch 秒)
 CTX["quote"] = lambda ch, c: (_px.get((ch, L(c or ""))), _liq.get((ch, L(c or ""))))
 price_cache = jload(DATA / "prices.json", {})              # "chain:contract" -> {"px": .., "ts": ..}（前回価格。API 不調時の保険）
@@ -755,6 +756,19 @@ def _note_created(chain, contract, p):
         key = (chain, contract); t = int(c) // 1000
         _created[key] = min(_created.get(key, t), t)
         pc = price_cache.setdefault(f"{chain}:{contract}", {}); pc["created"] = min(pc.get("created") or t, t)
+
+def _note_mcap(chain, contract, p):
+    """採用したペアの時価総額と FDV を控える（FDV=0 で mcap>0 は桁あふれ＝総供給が異常なトークンの印）"""
+    try: mc = float(p.get("marketCap") or 0); fd = float(p.get("fdv") or 0)
+    except (TypeError, ValueError): return
+    _mcap[(chain, contract)] = (mc, fd)
+    price_cache.setdefault(f"{chain}:{contract}", {}).update({"mcap": mc, "fdv": fd})
+
+def mcap_of(chain, contract):
+    key = (chain, L(contract))
+    if key in _mcap: return _mcap[key]
+    pc = price_cache.get(f"{chain}:{L(contract)}") or {}
+    return (pc.get("mcap"), pc.get("fdv")) if "mcap" in pc else (None, None)
 
 def pair_created(chain, contract):
     key = (chain, L(contract))
@@ -784,7 +798,7 @@ def prefetch_prices(chain, contracts):
             addr = L((p.get("baseToken") or {}).get("address") or "")
             if addr in cs:
                 liq, px = _pair_price(p); _note_created(chain, addr, p)
-                if addr not in best or liq > best[addr][0]: best[addr] = (liq, px); _sym[(chain, addr)] = (p.get("baseToken") or {}).get("symbol") or _sym.get((chain, addr))
+                if addr not in best or liq > best[addr][0]: best[addr] = (liq, px); _sym[(chain, addr)] = (p.get("baseToken") or {}).get("symbol") or _sym.get((chain, addr)); _note_mcap(chain, addr, p)
         for c in chunk: _set_px(chain, c, best.get(c, (0, None))[1]); _liq[(chain, c)] = best.get(c, (0, None))[0]
         time.sleep(0.3)
 
@@ -806,7 +820,8 @@ def price(chain, symbol, contract):
     try:
         if j:
             for p_ in j: _note_created(chain, contract, p_)
-            liq, px = _pair_price(max(j, key=lambda p: float((p.get("liquidity") or {}).get("usd") or 0))); _liq[key] = liq
+            bestp = max(j, key=lambda p: float((p.get("liquidity") or {}).get("usd") or 0))
+            liq, px = _pair_price(bestp); _liq[key] = liq; _note_mcap(chain, contract, bestp)
     except Exception: px = None
     _set_px(chain, contract, px)
     return px
@@ -933,6 +948,55 @@ def verify_phantom_receipts(new_evs):
             log(f"  幻の送金: {ch} {label(w)} {lst[0]['token']} ×{len(lst)}（≈{P.fmt_usd(sum(e.get('usd') or 0 for e in lst))}）→ balanceOf=0 のため なりすまし扱い")
         time.sleep(0.2)
 
+VALUATION_CHECK_USD = float(CFG.get("valuation_check_usd", 5000))   # この額以上のリスク保有は評価の妥当性を検査する
+MAX_SUPPLY = float(CFG.get("max_token_supply", 1e22))               # 総供給がこれを超えるトークンは異常（Monkey は 1e76）
+MAX_MCAP = float(CFG.get("max_token_mcap_usd", 2e10))               # DEX 銘柄で時価総額 $200億超は偽装（SPYB は $3,320億）
+MAX_LIQ = float(CFG.get("max_pair_liquidity_usd", 3e8))             # 1ペアの流動性 $3億超は偽装（SPYB は $15.7億）
+AIRDROP_LIQ_MULT = float(CFG.get("airdrop_liq_multiple", 2.0))      # 買っていない受取のみの銘柄は、評価額が流動性のこの倍数を超えたら売れないと見なす
+
+def token_supply(chain, contract):
+    """総供給（枚）。EVM は totalSupply() をチェーンに直接問い合わせ、token_meta に永続キャッシュ。Solana・失敗は None"""
+    if provider(chain) == "helius" or contract == "native": return None
+    m = token_meta.get(f"{chain}:{contract}") or {}
+    if m.get("supply") is not None: return m["supply"]
+    res = evm_call(chain, {"method": "eth_call", "params": [{"to": contract, "data": "0x18160ddd"}, "latest"]})
+    try: raw = int(res, 16) if res else None
+    except ValueError: raw = None
+    if raw is None: return None
+    sup = raw / 10 ** token_decimals(chain, contract)
+    token_meta[f"{chain}:{contract}"] = {**(token_meta.get(f"{chain}:{contract}") or m), "supply": sup, "symbol": m.get("symbol") or "?"}
+    return sup
+
+def valuation_check(chain, contract, symbol, amount, px, usd):
+    """保有の評価額（枚数×価格）が現実的かを検査する。異常なら (False, 理由)。
+       unipcs の Monkey（総供給 1e76・decimals 0・受け取っただけ・流動性 $67K に対し評価 $2.9M）が総資産の 12% を占めた事故の再発防止。
+       流動性で機械的に上限をかけると、本当に買った AMC（評価/流動性 14 倍・時価総額 $94M）まで潰れるので、異常の兆候だけを見る"""
+    c = L(contract); liq = _liq.get((chain, c)); mcap, fdv = mcap_of(chain, c)
+    if mcap and fdv == 0: return False, "DexScreener の FDV が桁あふれ（総供給が異常）"
+    if mcap and mcap > MAX_MCAP: return False, f"時価総額 {P.fmt_usd(mcap)} は DEX 銘柄として非現実的（偽装）"
+    if liq and liq > MAX_LIQ: return False, f"流動性 {P.fmt_usd(liq)} は非現実的（偽装）"
+    if mcap and usd > mcap: return False, f"評価額が時価総額 {P.fmt_usd(mcap)} を超える"
+    sup = token_supply(chain, c)
+    if sup and sup > MAX_SUPPLY: return False, f"総供給 {sup:.1e} 枚は異常（decimals/供給の偽装）"
+    flows = [P.flow_of(e, CTX) for e in events if e["chain"] == chain and L(e["contract"] or "") == c]
+    if liq and usd > AIRDROP_LIQ_MULT * liq:
+        if flows and "buy" not in flows and "in" in flows: return False, f"買っていない受取のみで、評価額が流動性 {P.fmt_usd(liq)} の {usd / liq:.0f} 倍（売れない）"
+        if not (symbol or "").isascii(): return False, f"非ASCIIシンボルのばら撒き銘柄で、評価額が流動性 {P.fmt_usd(liq)} の {usd / liq:.0f} 倍"
+    return True, ""
+
+def apply_prices(ch, h):
+    """残高に価格と評価額を付け、リスク保有の評価が異常なら usd=0（除外）にして理由を残す"""
+    prefetch_prices(ch, [v["contract"] for v in h.values() if not v.get("price")])
+    for s, v in h.items():
+        v["price"] = v.get("price") or price(ch, v["symbol"], v["contract"]); v["usd"] = v["amount"] * v["price"] if v["price"] else None
+        v.pop("excluded", None); v.pop("usd_raw", None)
+        if v["usd"] and v["usd"] >= VALUATION_CHECK_USD and P.bucket_of(ch, v["contract"], CTX) == "risk":
+            try: ok, why = valuation_check(ch, v["contract"], v["symbol"], v["amount"], v["price"], v["usd"])
+            except Exception as e: ok, why = True, ""; warn(f"評価チェックでエラー {ch} {v['symbol']}: {e!r}")
+            if not ok:
+                v["excluded"] = why; v["usd_raw"] = v["usd"]; v["usd"] = 0.0
+                log(f"  評価除外 {ch} {v['symbol']} {v['amount']:.4g} 枚（名目 {P.fmt_usd(v['usd_raw'])}）: {why}")
+
 VANISH_MIN_USD = float(CFG.get("vanish_check_usd", 1000))     # 前回これ以上あった銘柄が消えたら実在確認する
 def guard_vanished_positions(chain, addr, h, old, since_ts):
     """前回の残高にあった銘柄が、売り・送金の記録なしに消えた/ゼロになったら、索引の取りこぼしを疑って
@@ -1020,9 +1084,7 @@ def run():
         for w in list(wallets):
             for ch in active:
                 if not addr_fits(ch, w) or (ch not in wallets[w]["chains"] and wallets[w]["role"] != "本体"): continue
-                h = fetch_holdings(ch, w) or {}; prefetch_prices(ch, [v["contract"] for v in h.values() if not v.get("price")])
-                for s_, v in h.items():
-                    v["price"] = v["price"] or price(ch, v["symbol"], v["contract"]); v["usd"] = v["amount"] * v["price"] if v["price"] else None
+                h = fetch_holdings(ch, w) or {}; apply_prices(ch, h)
                 first_h[f"{ch}:{w}"] = h
         doc0 = {"version": 3, "updated": datetime.now(timezone.utc).isoformat(), "holdings": first_h}
         snapshots.append(P.build_snapshot(doc0, CTX)); json.dump(doc0, open(DATA / "holdings.json", "w"), indent=2, ensure_ascii=False)
@@ -1113,9 +1175,7 @@ def run():
                 else:
                     try: guard_vanished_positions(ch, w, h, old, since_ts)
                     except Exception as e: warn(f"{ch} {short(w)} 消失ポジションの確認でエラー: {e!r}")
-                prefetch_prices(ch, [v["contract"] for v in h.values() if not v.get("price")])
-                for s, v in h.items():
-                    v["price"] = v["price"] or price(ch, v["symbol"], v["contract"]); v["usd"] = v["amount"] * v["price"] if v["price"] else None
+                apply_prices(ch, h)
                 holdings[key] = h
                 time.sleep(0.3)
         holdings_doc = {"version": 3, "updated": datetime.now(timezone.utc).isoformat(), "holdings": holdings}

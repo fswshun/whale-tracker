@@ -266,8 +266,18 @@ def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label,
         keyed = sorted([(k, p) for k, p in cur["pos"].items() if p["b"] == "risk"], key=lambda kv: -kv[1]["usd"])[:15]
         pos_rows = "<section class='panel'><h2>いま持っているリスク資産（クラスター合算・上位15）</h2><table><thead><tr><th>銘柄</th><th class='r'>数量</th><th class='r'>単価</th><th class='r'>評価額</th><th class='r'>比率</th></tr></thead><tbody>" + "".join(
             f"<tr><td>{esc(P.symc(p['sym'], k.split(':')[0]))}</td><td class='r'>{esc(P.fmt_qty(p['amt']))}</td><td class='r'>{('$%.4g' % p['px']) if p.get('px') else '—'}</td><td class='r'>{usd(p['usd'])}</td><td class='r'>{p['usd'] / cur['risk'] * 100:.1f}%</td></tr>" for k, p in keyed) + "</tbody></table></section>"
-    # --- 下段: 従来の台帳（折りたたみ） ---
+    # --- 評価から除外した銘柄（異常トークン・売れないエアドロップ） ---
     def who(w): return esc(names.get(w) or label(w))
+    exc = []
+    for key, h in holdings.items():
+        ch, w = key.split(":")
+        for c, v in h.items():
+            if v.get("excluded"): exc.append((ch, w, v))
+    exc.sort(key=lambda x: -(x[2].get("usd_raw") or 0))
+    excluded_html = ("<section class='panel'><h2>⚠️ 評価から除外した銘柄（総資産に含めていません）</h2><div style='overflow-x:auto'><table><thead><tr><th>銘柄</th><th>誰</th><th class='r'>枚数</th><th class='r'>名目評価額</th><th>除外理由</th></tr></thead><tbody>"
+                     + "".join(f"<tr class='warn'><td>{esc(P.symc(v.get('symbol') or '?', ch))}</td><td>{who(w)}</td><td class='r'>{esc(P.fmt_qty(v['amount']))}</td><td class='r'>{usd(v.get('usd_raw'))}</td><td class='w'>{esc(v['excluded'])}</td></tr>" for ch, w, v in exc[:30])
+                     + "</tbody></table></div><div class='sub'>枚数×価格の名目値が、総供給・時価総額・流動性・入手経路（買っていない受取のみ）と矛盾する銘柄。売って現金化できる根拠が無いため 0 評価にしている。</div></section>") if exc else ""
+    # --- 下段: 従来の台帳（折りたたみ） ---
     by_wallet = defaultdict(list)
     for key, h in holdings.items():
         ch, w = key.split(":")
@@ -297,5 +307,5 @@ def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label,
 <meta name="robots" content="noindex,nofollow"><title>{esc(tl.get("name") or "クジラ")} 資産レポート</title><style>{CSS}</style></head><body>
 <header><h1>{esc(tl.get("name") or "クジラ")} 資産レポート <small>本体 {sum(1 for w in wallets if wallets[w]['role'] == '本体')} ＋ 自動検出 {sum(1 for w in wallets if wallets[w]['role'] != '本体')} ウォレット</small></h1>
 <div class="sub">更新 {P.jst(int(now.timestamp())).strftime('%m-%d %H:%M')} JST（10分ごと）</div></header>
-<main>{hero}{chart}{matrix_html}{days}{pos_rows}{newpos_html}{rules}{old}</main><script>{CHART_JS}</script></body></html>"""
+<main>{hero}{chart}{matrix_html}{days}{pos_rows}{newpos_html}{excluded_html}{rules}{old}</main><script>{CHART_JS}</script></body></html>"""
     out_path.write_text(doc, encoding="utf-8")
