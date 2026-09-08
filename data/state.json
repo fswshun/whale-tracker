@@ -1,5 +1,5 @@
 {
-  "run_count": 161,
+  "run_count": 162,
   "last_daily": "2026-09-08",
   "cross_alerted": [
     [
@@ -89,6 +89,26 @@
       "note": "",
       "value": 370.2675,
       "unit": 0.00014036322416161384
+    },
+    "robinhood:0xc72f114386e513b926b023cb8df8a83609761974:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
+      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
+      "chain": "robinhood",
+      "contract": "0xc72f114386e513b926b023cb8df8a83609761974",
+      "sym": "CRUMBS",
+      "amount": 23245392.027857557,
+      "usd": 0.0,
+      "counter_usd": 148.73459999999997,
+      "n": 1,
+      "other": {
+        "ETH": 0.06
+      },
+      "first": 1788876949,
+      "last": 1788876949,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 148.73459999999997,
+      "unit": 6.398455221652302e-06
     }
   }
 }
