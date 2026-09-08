@@ -1,5 +1,5 @@
 {
-  "run_count": 188,
+  "run_count": 189,
   "last_daily": "2026-09-08",
   "cross_alerted": [
     [
@@ -815,6 +815,46 @@
       "note": "",
       "value": 248.829,
       "unit": 0.00020967733442274386
+    },
+    "robinhood:0x110cfd84fd60b90786e94d14ad771101ed8c7777:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
+      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
+      "chain": "robinhood",
+      "contract": "0x110cfd84fd60b90786e94d14ad771101ed8c7777",
+      "sym": "HODL",
+      "amount": 1922886.4598868713,
+      "usd": 432.649453474546,
+      "counter_usd": 497.486,
+      "n": 1,
+      "other": {
+        "ETH": 0.2
+      },
+      "first": 1788894608,
+      "last": 1788894608,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 497.486,
+      "unit": 0.00025871834368695304
+    },
+    "robinhood:0x110cfd84fd60b90786e94d14ad771101ed8c7777:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
+      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
+      "chain": "robinhood",
+      "contract": "0x110cfd84fd60b90786e94d14ad771101ed8c7777",
+      "sym": "HODL",
+      "amount": 1770144.1582368056,
+      "usd": 398.2824356032813,
+      "counter_usd": 497.486,
+      "n": 1,
+      "other": {
+        "ETH": 0.2
+      },
+      "first": 1788894608,
+      "last": 1788894608,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 497.486,
+      "unit": 0.00028104264711159614
     }
   },
   "last_daily_cut": 1788879600
