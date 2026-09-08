@@ -185,7 +185,9 @@ def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label,
                 f"<div class='tile'><div class='v'>{n_w}</div><div class='lbl'>監視ウォレット</div></div></div>"
                 f"<div class='sub' style='width:100%'>本体アドレス: " + "　".join(f"<code style='font-size:12px'>{esc(a)}</code>（{'Solana' if not a.startswith('0x') else 'EVM'}）" for a in cfg.get("main_wallets", [])) + "</div>"
                 f"<div class='sub' style='width:100%'>チェーン別: {chain_breakdown(cur, chains)}</div>"
-                f"<div class='sub' style='width:100%'>残高時点 {jst(cur['ts'])} JST　評価は DexScreener/Blockscout の現在値（流動性の薄い銘柄は実際に売れる額より大きく出ます）</div></section>")
+                f"<div class='sub' style='width:100%'>残高時点 {jst(cur['ts'])} JST　評価は DexScreener/Blockscout の現在値（流動性の薄い銘柄は実際に売れる額より大きく出ます）</div>"
+                + (f"<div class='sub' style='width:100%;color:var(--warn)'>※ {len(tl.get('stale') or [])} 件のウォレット・チェーンで残高を取得できず、前回の保有数量に現在価格を掛けて表示しています（データ元の一時障害）。</div>" if tl.get("stale") else "")
+                + "</section>")
     else:
         hero = "<section class='panel hero'><div class='sub'>残高スナップショットがまだありません。次回の実行で作成されます。</div></section>"
     chart = f"<section class='panel'><h2>資産の推移（毎日 9:00 JST 時点）</h2>{chart_svg(pts)}</section>"

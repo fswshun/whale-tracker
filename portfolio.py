@@ -134,6 +134,26 @@ def load_snapshots(path):
     out.sort(key=lambda s: s["ts"])
     return out
 
+def drop_artifact_snapshots(snaps, min_usd=1000.0, tol=0.001):
+    """データ元の索引障害でポジションが一時的に消えた時点を落とす。
+       判定＝前後の時点に同じ枚数（誤差0.1%以内）で存在する $1,000 以上の銘柄が、その時点だけ消えている
+       （売って同じ枚数を買い戻すことは実質ありえないので、消失は取得漏れと断定できる）"""
+    if len(snaps) < 3: return snaps, []
+    drop = []
+    for i in range(1, len(snaps) - 1):
+        a, b, c = snaps[i - 1], snaps[i], snaps[i + 1]
+        if any(s.get("approx") for s in (a, b, c)): continue
+        lost = 0.0
+        for k, pa in a["pos"].items():
+            pc = c["pos"].get(k)
+            if not pc or (pa.get("usd") or 0) < min_usd: continue
+            if (b["pos"].get(k, {}).get("amt") or 0) > 0: continue
+            if abs(pc["amt"] - pa["amt"]) / max(pa["amt"], 1e-9) < tol: lost += pa["usd"]
+        if lost >= min_usd: drop.append((b["ts"], lost))
+    if not drop: return snaps, []
+    bad = {ts for ts, _ in drop}
+    return [s for s in snaps if s["ts"] not in bad], drop
+
 def prune_snapshots(snaps, keep_hourly_days=7):
     """直近7日は全部、それより前は 00:00 UTC 直前の1本だけ残す"""
     if not snaps: return snaps

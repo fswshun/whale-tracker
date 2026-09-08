@@ -110,6 +110,7 @@ MIN_SEED_NATIVE = {"solana": float(CFG.get("solana_min_seed_sol", 0.2)), "defaul
 SOLANA_MAX_DEPTH = int(CFG.get("solana_max_depth", 1))                # Solana で子ウォレットを追う深さ（1=本体の直接の子まで）
 SERVICE_PREFIX = re.compile(r"^0x00aa", re.I)
 BLOCKSCOUT_PAGE = 10000
+HOLDINGS_MAX_PAGES = int(CFG.get("holdings_max_pages", 25))   # 残高一覧のページ上限（スパムトークンが多い口座で本物が切り捨てられるのを防ぐ）
 NR_HEAD_MARGIN = int(CFG.get("nodereal_head_margin_blocks", 40))   # BSC 先頭からこのブロック数だけ手前まで取得（次回に持ち越し）
 
 S = requests.Session()
@@ -130,6 +131,7 @@ state = jload(DATA / "state.json", {"run_count": 0})
 pending_eoa = jload(DATA / "pending_eoa.json", [])  # EOA判定が取れなかった候補（次回再判定）
 events = [json.loads(l) for l in open(DATA / "events.jsonl")] if (DATA / "events.jsonl").exists() else []
 snapshots = P.load_snapshots(DATA / "snapshots.jsonl")   # クラスター合算の残高履歴（1時間ごと、7日超は日次）
+snapshots, _artifacts = P.drop_artifact_snapshots(snapshots)   # 索引障害でポジションが一時的に消えた時点を除去（前後に同枚数で存在するもの）
 token_meta = jload(DATA / "token_meta.json", {})          # "solana:mint" -> {symbol, decimals}（Solana はイベントにシンボルが無いため）
 labels = {L(k): v for k, v in CFG.get("labels", {}).items()}
 SERVICES = {k: v for k, v in jload(CODE_DIR / "services.json", {}).items() if not k.startswith("_")}   # 共有サービス/ボット（コードリポで一元管理）
@@ -201,16 +203,21 @@ def bs_compat(chain, params):
     warn(f"{chain} compat {params.get('action')}: {msg} {str(res)[:80]}")
     return None
 
-def bs_compat_all(chain, params):
-    """互換APIのページング（offset 上限 10000 × 最大 5 ページ）"""
+def bs_compat_all(chain, params, info=None):
+    """互換APIのページング（offset 上限 10000 × 最大 5 ページ）。
+       全件取れなかった場合は info["truncated"]=True を立てる（打ち切られた履歴から残高を再構成しないため）"""
     out = []
     for page in range(1, 6):
         res = bs_compat(chain, {**params, "page": page, "offset": BLOCKSCOUT_PAGE})
         if res is None:
-            if page > 1: warn(f"{chain} {params.get('action')}: {page}ページ目が取れないため {len(out)} 行で打ち切り"); return out   # PRO API は page×offset ≤ 10000
+            if page > 1:
+                warn(f"{chain} {params.get('action')}: {page}ページ目が取れないため {len(out)} 行で打ち切り")   # PRO API は page×offset ≤ 10000
+                if info is not None: info["truncated"] = True
+                return out
             return None
         out.extend(res)
-        if len(res) < BLOCKSCOUT_PAGE: break
+        if len(res) < BLOCKSCOUT_PAGE: return out
+    if info is not None: info["truncated"] = True      # 5ページ全部埋まった＝まだ続きがある
     return out
 
 def bs_v2(chain, path, params=None):
@@ -281,7 +288,7 @@ def bs_holdings(chain, addr):
         if isinstance(bal, str) and bal.isdigit():
             h["native"] = {"symbol": CHAINS[chain]["native"], "amount": int(bal) / 1e18, "contract": "native", "price": None}
     params, pages = {"type": "ERC-20"}, 0
-    for _ in range(12):
+    for _ in range(HOLDINGS_MAX_PAGES):
         j = bs_v2(chain, f"/addresses/{addr}/tokens", params)
         if not isinstance(j, dict) or "items" not in j:
             time.sleep(3); j = bs_v2(chain, f"/addresses/{addr}/tokens", params)      # 1回だけ再試行
@@ -296,11 +303,17 @@ def bs_holdings(chain, addr):
         if not j.get("next_page_params"): break
         params = {"type": "ERC-20", **j["next_page_params"]}
     else:
-        warn(f"{chain} {short(addr)}: トークンが12ページ超、以降は切り捨て")
-    if pages == 0:   # v2 が落ちている時は tokentx 全履歴の差引で代用
+        warn(f"{chain} {short(addr)}: トークンが {HOLDINGS_MAX_PAGES} ページ超、以降は切り捨て（config の holdings_max_pages）")
+    if pages == 0:   # v2 が落ちている時は tokentx 全履歴の差引で代用（履歴が全件取れる小口ウォレットのみ）
         warn(f"{chain} v2 tokens 取得不可 → tokentx 差引で代用 {short(addr)}")
+        info = {}
+        rows = bs_compat_all(chain, {"module": "account", "action": "tokentx", "address": addr, "startblock": 0, "endblock": 99999999, "sort": "asc"}, info)
+        if rows is None or info.get("truncated"):
+            # 履歴が1万行で打ち切られると新しい銘柄が丸ごと欠け、保有が「全売却」に見える（kyle の AMC/AI 事故）
+            warn(f"{chain} {short(addr)}: トークン一覧も全履歴も取れないため今回の残高更新は見送り（前回値を持ち越す）")
+            return None
         net = defaultdict(float); meta = {}
-        for t in bs_compat_all(chain, {"module": "account", "action": "tokentx", "address": addr, "startblock": 0, "endblock": 99999999, "sort": "asc"}) or []:
+        for t in rows:
             dec = int(t.get("tokenDecimal") or 18); k = L(t["contractAddress"]); v = int(t["value"]) / 10 ** dec
             net[k] += v if L(t["to"]) == L(addr) else -v; meta[k] = t.get("tokenSymbol") or "?"
         for k, v in net.items():
@@ -322,7 +335,7 @@ def rpc_balance_of(chain, contract, addr):
             except ValueError: pass
     return None
 
-def bs_reconcile_holdings(chain, addr, h, limit=25):
+def bs_reconcile_holdings(chain, addr, h, limit=40):
     """Blockscout の残高インデックスが欠落する銘柄（例: Base の O）を、tokentx の差引 → 価格あり → balanceOf で補完"""
     net = defaultdict(float); meta = {}
     for t in bs_compat_all(chain, {"module": "account", "action": "tokentx", "address": addr, "startblock": 0, "endblock": 99999999, "sort": "desc"}) or []:
@@ -331,8 +344,9 @@ def bs_reconcile_holdings(chain, addr, h, limit=25):
     missing = [k for k, v in net.items() if v > 1e-6 and (k not in h or h[k]["amount"] <= 0)]
     if not missing: return
     prefetch_prices(chain, missing)
-    priced = [k for k in missing if _px.get((chain, k))][:limit]     # 価格の付く（=流動性のある）銘柄だけ確認
-    for k in priced:
+    priced = [k for k in missing if _px.get((chain, k))]             # 価格の付く（=流動性のある）銘柄だけ確認
+    priced.sort(key=lambda k: -(_px[(chain, k)] * max(net[k], 0)))   # 金額の大きい順（上限に当たっても大口を取りこぼさない）
+    for k in priced[:limit]:
         raw = rpc_balance_of(chain, k, addr)
         if raw:
             sym, dec = meta[k]; h[k] = {"symbol": sym, "amount": raw / 10 ** dec, "contract": k, "price": _px.get((chain, k))}
@@ -494,7 +508,7 @@ def alc_holdings(chain, addr):
         if amt > 0: h[c] = {"symbol": meta.get("symbol") or "?", "amount": amt, "contract": c, "price": None}
     return h
 
-def evm_reconcile_by_events(chain, addr, h, limit=30):
+def evm_reconcile_by_events(chain, addr, h, limit=40):
     """取引履歴（events）で受け取った銘柄のうち、残高一覧に無いものを balanceOf で確認して補完"""
     seen = {}
     for e in events:
@@ -862,15 +876,38 @@ def resolve_purchases(evs):
             e["kind"] = "受取(新規トークン)"; e["note"] = f"上場 {(e['ts'] - c) / 3600:.1f} 時間後の少額受取（エアドロップ疑い）"
 
 PHANTOM_CHECK_USD = float(CFG.get("phantom_check_usd", 1000))   # この額以上の「受取」は balanceOf で実在を確認する
-def balance_of(chain, contract, addr):
-    """ERC-20 balanceOf（生の整数）。Blockscout 系は PRO json-rpc → 公開 RPC、BSC は NodeReal/Alchemy。失敗は None"""
-    if provider(chain) == "blockscout": return rpc_balance_of(chain, contract, addr)
+def evm_call(chain, payload):
+    """EVM の JSON-RPC を1回叩いて result（hex文字列）を返す。Blockscout 系は PRO json-rpc → 公開 RPC、BSC は NodeReal/Alchemy"""
     if provider(chain) == "nodereal":
-        res = nr_rpc(chain, "eth_call", [{"to": contract, "data": "0x70a08231" + addr[2:].rjust(64, "0")}, "latest"])
-        if isinstance(res, str) and res.startswith("0x") and len(res) > 2:
-            try: return int(res, 16)
-            except ValueError: return None
+        res = nr_rpc(chain, payload["method"], payload["params"])
+        return res if isinstance(res, str) else None
+    urls = ([f"{BLOCKSCOUT_PRO}/{CHAINS[chain]['chain_id']}/json-rpc?apikey={BLOCKSCOUT_KEY}"] if BLOCKSCOUT_KEY else []) + CHAINS[chain].get("rpcs", [])
+    for url in urls:
+        j = http_json("POST", url, retries=1, json={"jsonrpc": "2.0", "id": 1, **payload})
+        res = j.get("result") if isinstance(j, dict) else None
+        if isinstance(res, str) and res.startswith("0x") and len(res) > 2: return res
     return None
+
+def balance_of(chain, contract, addr):
+    """残高（生の整数）をチェーンに直接聞く。contract="native" はネイティブ残高。索引に依存しないので障害時の最後の砦。失敗は None"""
+    if provider(chain) == "helius": return None
+    if contract == "native": res = evm_call(chain, {"method": "eth_getBalance", "params": [addr, "latest"]})
+    else: res = evm_call(chain, {"method": "eth_call", "params": [{"to": contract, "data": "0x70a08231" + addr[2:].rjust(64, "0")}, "latest"]})
+    if not res: return None
+    try: return int(res, 16)
+    except ValueError: return None
+
+def token_decimals(chain, contract):
+    """ERC-20 decimals()。token_meta にキャッシュ。取れなければ 18"""
+    if contract == "native": return 18
+    m = token_meta.get(f"{chain}:{contract}") or {}
+    if m.get("decimals") is not None: return int(m["decimals"])
+    res = evm_call(chain, {"method": "eth_call", "params": [{"to": contract, "data": "0x313ce567"}, "latest"]})
+    try: dec = int(res, 16) if res else None
+    except ValueError: dec = None
+    if dec is None or not 0 <= dec <= 36: return 18
+    token_meta[f"{chain}:{contract}"] = {**m, "decimals": dec, "symbol": m.get("symbol") or "?"}
+    return dec
 
 def verify_phantom_receipts(new_evs):
     """本人が払っていない相手からの大きめのトークン受取が、実際の残高に反映されているかを balanceOf で確認する。
@@ -889,6 +926,31 @@ def verify_phantom_receipts(new_evs):
         if raw == 0:
             for e in lst: e["kind"] = "なりすまし(偽送金)"; e["note"] = "Transfer イベントだけで残高が増えていない（幻の送金・宣伝スパム）"
             log(f"  幻の送金: {ch} {label(w)} {lst[0]['token']} ×{len(lst)}（≈{P.fmt_usd(sum(e.get('usd') or 0 for e in lst))}）→ balanceOf=0 のため なりすまし扱い")
+        time.sleep(0.2)
+
+VANISH_MIN_USD = float(CFG.get("vanish_check_usd", 1000))     # 前回これ以上あった銘柄が消えたら実在確認する
+def guard_vanished_positions(chain, addr, h, old, since_ts):
+    """前回の残高にあった銘柄が、売り・送金の記録なしに消えた/ゼロになったら、索引の取りこぼしを疑って
+       チェーンに直接 balanceOf を聞き、実在すれば復元する。照会に失敗したら前回値を持ち越す。
+       （Blockscout の索引障害で AMC・AI が「全売却」に見え、総資産が 37% 落ちて見えた事故の再発防止）"""
+    if not old or provider(chain) == "helius": return
+    gone = [c for c, v in old.items() if (v.get("usd") or 0) >= VANISH_MIN_USD and (h.get(c, {}).get("amount") or 0) <= 0]
+    if not gone: return
+    sold = {L(e["contract"] or "") for e in events
+            if e["chain"] == chain and e["wallet"] == addr and e["dir"] == "OUT" and e["ts"] >= since_ts - 3600}
+    for c in gone:
+        if c in sold: continue                                    # 売り・送りの記録があるなら本当に減っている
+        raw = balance_of(chain, c, addr)
+        sym = old[c].get("symbol") or "?"
+        if raw is None:
+            h[c] = {**old[c], "price": None, "usd": None}
+            warn(f"{chain} {short(addr)} {sym}: 一覧から消えたが残高照会も失敗 → 前回値を持ち越し")
+        elif raw > 0:
+            amt = raw / 10 ** token_decimals(chain, c)
+            h[c] = {"symbol": sym, "amount": amt, "contract": c, "price": None}
+            log(f"  索引漏れを補完 {chain} {short(addr)} {sym} {amt:,.4g}（一覧から消えていたが balanceOf で保有を確認）")
+        else:
+            log(f"  {chain} {short(addr)} {sym}: 残高 0 を確認（売却記録は無いが実際に無くなっている）")
         time.sleep(0.2)
 
 # ------------------------------------------------------------ 子ウォレット登録
@@ -953,7 +1015,7 @@ def run():
         for w in list(wallets):
             for ch in active:
                 if not addr_fits(ch, w) or (ch not in wallets[w]["chains"] and wallets[w]["role"] != "本体"): continue
-                h = fetch_holdings(ch, w); prefetch_prices(ch, [v["contract"] for v in h.values() if not v.get("price")])
+                h = fetch_holdings(ch, w) or {}; prefetch_prices(ch, [v["contract"] for v in h.values() if not v.get("price")])
                 for s_, v in h.items():
                     v["price"] = v["price"] or price(ch, v["symbol"], v["contract"]); v["usd"] = v["amount"] * v["price"] if v["price"] else None
                 first_h[f"{ch}:{w}"] = h
@@ -1022,18 +1084,31 @@ def run():
     if state["daily_due"]: need = True                                   # 日次レポートの時点は必ず実残高で
     if need and over_budget(): warn("時間予算超過 → 残高更新は次回"); need = False
     if need:
-        holdings = {}
+        holdings = {}; stale = []
+        prev_h = prev.get("holdings") or {}
+        try: since_ts = int(datetime.fromisoformat(prev["updated"]).timestamp()) if prev.get("updated") else 0
+        except Exception: since_ts = 0
         for w in wallets:
             for ch in active:
                 if not addr_fits(ch, w): continue
                 if ch not in wallets[w]["chains"] and wallets[w]["role"] != "本体": continue
+                key = f"{ch}:{w}"; old = prev_h.get(key) or {}
                 h = fetch_holdings(ch, w)
+                old_usd = sum((v.get("usd") or 0) for v in old.values())
+                if h is None or (not h and old_usd >= VANISH_MIN_USD):
+                    # 取得できなかった時に空で上書きすると「全部売った」ように見える → 前回値を持ち越し、価格だけ付け直す
+                    h = {c: {**v, "price": None, "usd": None} for c, v in old.items()}
+                    if h: stale.append(key); warn(f"{ch} {short(w)}: 残高を取得できず前回値を持ち越し（{P.fmt_usd(old_usd)}）")
+                else:
+                    try: guard_vanished_positions(ch, w, h, old, since_ts)
+                    except Exception as e: warn(f"{ch} {short(w)} 消失ポジションの確認でエラー: {e!r}")
                 prefetch_prices(ch, [v["contract"] for v in h.values() if not v.get("price")])
                 for s, v in h.items():
                     v["price"] = v["price"] or price(ch, v["symbol"], v["contract"]); v["usd"] = v["amount"] * v["price"] if v["price"] else None
-                holdings[f"{ch}:{w}"] = h
+                holdings[key] = h
                 time.sleep(0.3)
         holdings_doc = {"version": 3, "updated": datetime.now(timezone.utc).isoformat(), "holdings": holdings}
+        if stale: holdings_doc["stale"] = stale
     else:
         holdings_doc = prev; holdings = prev["holdings"]
     state["holdings_refreshed"] = bool(need)
@@ -1205,6 +1280,7 @@ def html(holdings_doc):
     matrix = P.token_matrix(snapshots, CTX, top_n=int(CFG.get("matrix_top_n", 20)), extra_keys=[g["key"] for g in newpos])
     timeline = {"points": pts, "bridges": bridges, "names": P.role_names(wallets), "ctx": CTX, "min_usd": MOVE_MIN_USD, "buy_list_min_usd": float(CFG.get("buy_list_min_usd", 1000)), "new_positions": newpos, "matrix": matrix}
     timeline["name"] = WHALE_NAME
+    timeline["stale"] = holdings_doc.get("stale") if isinstance(holdings_doc, dict) else None
     render(CFG, CHAINS, wallets, events, hd, batches(events), THRESHOLD, label, out, holdings_updated=upd, timeline=timeline)
     log("HTML 生成:", out)
 
@@ -1213,6 +1289,8 @@ if __name__ == "__main__":
     if not HELIUS_KEY: warn("HELIUS_KEY 未設定（Solana は取得できません）")
     if not BLOCKSCOUT_KEY: warn("BLOCKSCOUT_KEY 未設定（公開インスタンスの API を使うため 429 が出やすくなります）")
     if DRY_RUN: log("DRY_RUN: 通知・保存なし")
+    for ts, lost in _artifacts:
+        warn(f"索引障害と判定し履歴から除去: {P.jst(ts).strftime('%m-%d %H:%M')} JST の時点（{P.fmt_usd(lost)} 分の保有が前後に同枚数で存在するのに欠落）")
     new_events, holdings_doc = run()
     log(f"新イベント {len(new_events)} 件 / 監視ウォレット {len(wallets)} / 保留EOA {len(pending_eoa)} / 所要 {(time.time()-T0)/60:.1f} 分")
     log("API呼び出し数: " + ", ".join(f"{h} {n}" for h, n in sorted(API_CALLS.items(), key=lambda kv: -kv[1])))
