@@ -80,7 +80,9 @@ KNOWN_STABLES = {
     ("solana", "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"), ("solana", "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"),
 }
 MIN_LIQ_USD = 5000     # DexScreener の流動性がこれ未満のペアの価格は使わない（偽トークン・ゴミ価格対策）
-BUY_ALERT_USD = float(CFG.get("buy_alert_usd", 5000))        # 買いはこの額から即時 Telegram
+BUY_ALERT_USD = float(CFG.get("buy_alert_usd", 5000))        # 買いはこの額から即時 Telegram（実行をまたぐ分割買いの累計でも可）
+BUY_LIST_MIN_USD = float(CFG.get("buy_list_min_usd", 5000))  # 台帳の買い一覧・新規銘柄の成績に載せる最小額（$1,000 は低すぎる → $5,000。2026-09-08）
+BUY_ACCUM_H = float(CFG.get("buy_accum_hours", 24))          # 分割買いを累計する時間窓
 MOVE_MIN_USD = float(CFG.get("move_min_usd", 5000))          # 一覧・まとめに載せる最小額
 PRICE_ALERT_PCT = float(CFG.get("price_move_alert_pct", 5))  # 1時間でリスク資産がこの%動いたらまとめを送る
 DAILY_HOUR_UTC = int(CFG.get("daily_report_hour_utc", 15))   # 1日の締め＝日次レポート時刻（15 UTC = 24:00 JST。1日1通、1日の終わりに）
@@ -1177,6 +1179,31 @@ def tg(text):
         r = requests.post(f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage", data={"chat_id": TG_CHAT, "text": text[i:i + 3800], "disable_web_page_preview": True}, timeout=20)
         if not r.ok: warn("Telegram 送信失敗:", r.status_code, r.text[:200])
 
+def accumulate_buys(groups, now):
+    """実行（10分）をまたぐ分割買いを 銘柄×ウォレット ごとに累計し、未通知分の累計が BUY_ALERT_USD に達した時点で通知対象にする。
+       例: $1,200 × 5 回を 30 分かけて買った場合、従来は各実行で $5,000 未満のため通知されなかった → 5 回目で「累計 $6K・5回」として通知。
+       通知した分はリセット（大口の単発買いは従来通りその回だけ）。BUY_ACCUM_H 時間動きが無い銘柄は忘れる。state.buy_accum に永続化"""
+    acc = state.setdefault("buy_accum", {})
+    for a in groups:
+        key = f"{a['chain']}:{a['contract']}:{a['wallet']}"
+        e = acc.get(key)
+        if e and now - e["last"] > BUY_ACCUM_H * 3600: e = None
+        if not e:
+            e = acc[key] = {"wallet": a["wallet"], "chain": a["chain"], "contract": a["contract"], "sym": a["sym"], "amount": 0.0, "usd": 0.0,
+                            "counter_usd": 0.0, "n": 0, "other": {}, "first": a["first"], "last": a["last"], "runs": 0, "funding": 0.0, "note": ""}
+        e["amount"] += a["amount"]; e["usd"] += a["usd"]; e["counter_usd"] += a["counter_usd"]; e["n"] += a["n"]; e["runs"] += 1; e["sym"] = a["sym"]
+        e["first"] = min(e["first"], a["first"]); e["last"] = max(e["last"], a["last"])
+        for t, v in a["other"].items(): e["other"][t] = e["other"].get(t, 0.0) + v
+        if a.get("funding"): e["funding"] += a["funding"]; e["note"] = a.get("note", "")
+    out = []
+    for key, e in list(acc.items()):
+        if now - e["last"] > BUY_ACCUM_H * 3600: acc.pop(key); continue
+        e["value"] = e["counter_usd"] if e["counter_usd"] > 0 else e["usd"]
+        e["unit"] = e["value"] / e["amount"] if e["amount"] else None
+        if e["value"] >= BUY_ALERT_USD:
+            e["accum"] = e["runs"] > 1; out.append(acc.pop(key))
+    return sorted(out, key=lambda a: -a["value"])
+
 def notify(new_events, holdings):
     """Telegram の設計（2026-09-08 藤沼さん要望で再整理）
        (1) 即時: 買い ≥ BUY_ALERT_USD（DexScreener 付き）、目立つ売り・外部流出 ≥ SELL_ALERT_USD、新ウォレット検出、複数クジラ同時買い
@@ -1186,7 +1213,7 @@ def notify(new_events, holdings):
     cutoff = time.time() - NOTIFY_MAX_AGE_H * 3600
     recent = [e for e in new_events if e["ts"] >= cutoff]
     lines = []
-    buys = P.group_trades(recent, "buy", CTX, BUY_ALERT_USD)
+    buys = accumulate_buys(P.group_trades(recent, "buy", CTX, 50.0), time.time())
     if buys: lines += P.buy_alert_lines(buys, names, CTX)
     sells = P.group_trades(recent, "sell", CTX, SELL_ALERT_USD)
     outs = P.group_trades([e for e in recent if P.bucket_of(e["chain"], e["contract"], CTX) == "risk"], "out", CTX, SELL_ALERT_USD)
@@ -1276,13 +1303,13 @@ def html(holdings_doc):
     out = DOCS / ("index.dryrun.html" if DRY_RUN else "index.html")
     pts = P.cutoff_points(snapshots, n=45)
     bridges = [P.bridge(pts[i - 1], pts[i], events, CTX, MOVE_MIN_USD) for i in range(1, len(pts))]
-    newpos = P.new_positions(events, snapshots, CTX, days=int(CFG.get("new_positions_days", 14)), min_cost=float(CFG.get("buy_list_min_usd", 1000)))
+    newpos = P.new_positions(events, snapshots, CTX, days=int(CFG.get("new_positions_days", 14)), min_cost=BUY_LIST_MIN_USD)
     for g in newpos:   # 現在価格が無い銘柄は DexScreener で補う
         if not g["px"]:
             g["px"] = price(g["chain"], g["sym"], g["contract"]); g["liq"] = _liq.get((g["chain"], g["contract"]))
             if g["px"]: g["pnl_pct"] = (g["px"] / g["avg"] - 1) * 100; g["value"] = g["held"] * g["px"]
     matrix = P.token_matrix(snapshots, CTX, top_n=int(CFG.get("matrix_top_n", 20)), extra_keys=[g["key"] for g in newpos])
-    timeline = {"points": pts, "bridges": bridges, "names": P.role_names(wallets), "ctx": CTX, "min_usd": MOVE_MIN_USD, "buy_list_min_usd": float(CFG.get("buy_list_min_usd", 1000)), "new_positions": newpos, "matrix": matrix}
+    timeline = {"points": pts, "bridges": bridges, "names": P.role_names(wallets), "ctx": CTX, "min_usd": MOVE_MIN_USD, "buy_list_min_usd": BUY_LIST_MIN_USD, "new_positions": newpos, "matrix": matrix}
     timeline["name"] = WHALE_NAME
     timeline["stale"] = holdings_doc.get("stale") if isinstance(holdings_doc, dict) else None
     timeline["cut_desc"] = P.cut_desc()

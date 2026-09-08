@@ -101,7 +101,7 @@ var mt=document.querySelectorAll('.mtab');mt.forEach(function(t){t.addEventListe
 """
 
 # ------------------------------------------------------------ 日ごとの増減パネル
-def bridge_panel(br, names, ctx, idx, min_usd, buy_min=1000.0):
+def bridge_panel(br, names, ctx, idx, min_usd, buy_min=5000.0):
     def who(w): return esc(names.get(w, "?"))
     def trades_table(rows, kind):
         if not rows: return "<div class='sub'>なし</div>"
@@ -155,7 +155,7 @@ def bridge_panel(br, names, ctx, idx, min_usd, buy_min=1000.0):
               + (f"<div class='sub'>ほか {len(pos) - 25} 銘柄（${min_usd:,.0f} 以上）</div>" if len(pos) > 25 else "")) if pos else "<div class='sub'>対象なし</div>"
     return (f"<div class='day' id='day-{idx}'{'' if idx == 0 else ' hidden'}>{head}<div class='bridge'>{grid}"
             f"<span class='k tot'>リスク資産の増減 合計</span><span class='tot'></span><span class='v tot {cls_delta(br['risk1'] - br['risk0'])}'>{P.fmt_usd(br['risk1'] - br['risk0'], True)}</span></div>"
-            f"<h3>🟢 買い（${buy_min:,.0f} 以上、金額＝支払った額。小さな買いも新規銘柄の手掛かりになるので閾値を低めに）</h3>{trades_table([a for a in br['buy_list'] if a['value'] >= buy_min], 'buy')}"
+            f"<h3>🟢 買い（${buy_min:,.0f} 以上、金額＝支払った額。同一銘柄の分割買いは合算）</h3>{trades_table([a for a in br['buy_list'] if a['value'] >= buy_min], 'buy')}"
             f"<h3>🔻 利確 ＝ 売り（金額＝受け取った額）</h3>{trades_table([a for a in br['sell_list'] if a['value'] >= min_usd], 'sell')}"
             f"<h3>📤 外部流出（クラスター外のアドレスへ）</h3>{trades_table([a for a in br['out_list'] + br['cash_out_list'] if a['value'] >= min_usd], 'out')}"
             f"<h3>📈 値動きの寄与（上位）</h3>{mv}"
@@ -194,7 +194,7 @@ def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label,
     # --- 日ごとの増減 ---
     if bridges:
         tabs = "".join(f"<button class='tab' data-target='day-{i}' aria-selected='{'true' if i == 0 else 'false'}'>{esc(br['label1'])}</button>" for i, br in enumerate(reversed(bridges)))
-        panels = "".join(bridge_panel(br, names, ctx, i, min_usd, float(tl.get("buy_list_min_usd") or 1000)) for i, br in enumerate(reversed(bridges)))
+        panels = "".join(bridge_panel(br, names, ctx, i, min_usd, float(tl.get("buy_list_min_usd") or 5000)) for i, br in enumerate(reversed(bridges)))
         days = f"<section class='panel'><h2>時点ごとの増減（値動き / 利確 / 買い に分解）</h2><div class='tabs'>{tabs}</div>{panels}</section>"
     else:
         days = f"<section class='panel'><h2>時点ごとの増減</h2><div class='sub'>次の締め（{esc(cut)}）から、前日比の分解（値動き / 利確 / 買い）を表示します。</div></section>"
@@ -214,7 +214,7 @@ def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label,
                     f"<td class='r'>{esc(P.fmt_qty(g['held']))}<div class='sub'>{usd(g['value'])}</div>{sold}</td>"
                     f"<td class='r'>{P.fmt_usd(g['liq']) if g['liq'] else '—'}</td><td class='w sub'>{path}</td>"
                     f"<td>{('<a href=' + chr(39) + esc(link) + chr(39) + ' target=_blank rel=noopener>DexScreener</a>') if link else ''}</td></tr>")
-        newpos_html = ("<section class='panel'><h2>🆕 新規購入銘柄の成績（直近14日に買った銘柄・支払 $1,000 以上・平均取得単価に対する現在の損益）</h2><div style='overflow-x:auto'>"
+        newpos_html = (f"<section class='panel'><h2>🆕 新規購入銘柄の成績（直近14日に買った銘柄・支払 ${float(tl.get('buy_list_min_usd') or 5000):,.0f} 以上・平均取得単価に対する現在の損益）</h2><div style='overflow-x:auto'>"
                        "<table><thead><tr><th>銘柄 / 買い手</th><th>初回買い(JST)</th><th class='r'>買った枚数 / 支払額</th><th class='r'>平均取得</th><th class='r'>いま</th><th class='r'>損益</th><th class='r'>前時点比</th><th class='r'>現在保有 / 評価</th><th class='r'>流動性</th><th>買ってからの価格</th><th></th></tr></thead><tbody>"
                        + "".join(nrow(g) for g in newpos[:30]) + "</tbody></table></div>"
                        "<div class='sub'>平均取得＝支払った ETH/BNB の時価 ÷ 受け取った枚数（スリッページ込みの実質単価）。損益＝いまの価格 ÷ 平均取得 − 1。既存の大型銘柄（PONS 等）の推移は上のタブへ。</div></section>")

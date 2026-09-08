@@ -298,7 +298,7 @@ def buy_alert_lines(buys, names, ctx):
     lines = []
     for a in buys:
         who = names.get(a["wallet"], a["wallet"][:6]); t = jst(a["last"]).strftime("%m-%d %H:%M")
-        times = f"、{a['n']}回" if a["n"] > 1 else ""
+        times = (f"、{a['n']}回" if a["n"] > 1 else "") + ("（分割買いの累計）" if a.get("accum") else "")
         unit = f"、平均 ${a['unit']:.4g}/枚" if a.get("unit") else ""
         lines.append(f"🟢 買い  {who}  {symc(a['sym'], a['chain'])} {fmt_qty(a['amount'])} ≈ {fmt_usd(a['value'])}\n"
                      f"   支払 {other_leg_text(a)}{times}{unit}  {t} JST")
@@ -364,7 +364,7 @@ def digest_text(br, names, ctx, title, pages="", max_items=4):
 
 
 # ------------------------------------------------------------ 新規購入銘柄の成績（別出し）
-def new_positions(events, snaps, ctx, days=14, min_cost=1000.0):
+def new_positions(events, snaps, ctx, days=14, min_cost=5000.0):
     """直近 days 日に買ったリスク銘柄ごとの成績。平均取得単価（支払額÷枚数）と現在価格の比較、売却済み分、時点ごとの価格推移"""
     if not snaps: return []
     now = snaps[-1]; since = now["ts"] - days * DAY
