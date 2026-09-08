@@ -1212,6 +1212,7 @@ def notify(new_events, holdings):
     names = P.role_names(wallets); pages = CFG.get("pages_url", "")
     cutoff = time.time() - NOTIFY_MAX_AGE_H * 3600
     recent = [e for e in new_events if e["ts"] >= cutoff]
+    CTX["total_usd"] = snapshots[-1]["total"] if snapshots else None      # 買い・売りの「総資産の何%か」の分母（直近の残高時点）
     lines = []
     buys = accumulate_buys(P.group_trades(recent, "buy", CTX, 50.0), time.time())
     if buys: lines += P.buy_alert_lines(buys, names, CTX)

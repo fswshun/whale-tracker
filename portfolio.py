@@ -294,13 +294,20 @@ CHAIN_SHORT = {"robinhood": "Robinhood", "bsc": "BSC", "solana": "Solana", "ethe
 def chain_short(chain): return CHAIN_SHORT.get(chain, chain)
 def symc(sym, chain): return f"{sym}（{chain_short(chain)}）"   # 銘柄名は常にチェーン付きで表示
 
+def share_text(value, ctx, big_pct=10.0):
+    """総資産に対する比率。$1.3M の買いが総資産の 13% なら「かなり大きい」と分かる（藤沼さん要望）。10% 以上は「大口」を付ける"""
+    tot = ctx.get("total_usd")
+    if not tot or not value: return ""
+    pct = value / tot * 100
+    return f"（総資産の {pct:.1f}%{'・大口' if pct >= big_pct else ''}）"
+
 def buy_alert_lines(buys, names, ctx):
     lines = []
     for a in buys:
         who = names.get(a["wallet"], a["wallet"][:6]); t = jst(a["last"]).strftime("%m-%d %H:%M")
         times = (f"、{a['n']}回" if a["n"] > 1 else "") + ("（分割買いの累計）" if a.get("accum") else "")
         unit = f"、平均 ${a['unit']:.4g}/枚" if a.get("unit") else ""
-        lines.append(f"🟢 買い  {who}  {symc(a['sym'], a['chain'])} {fmt_qty(a['amount'])} ≈ {fmt_usd(a['value'])}\n"
+        lines.append(f"🟢 買い  {who}  {symc(a['sym'], a['chain'])} {fmt_qty(a['amount'])} ≈ {fmt_usd(a['value'])}{share_text(a['value'], ctx)}\n"
                      f"   支払 {other_leg_text(a)}{times}{unit}  {t} JST")
         q = ctx.get("quote")
         if q:
@@ -311,18 +318,22 @@ def buy_alert_lines(buys, names, ctx):
     return lines
 
 def sell_alert_lines(sells, outs, names, ctx):
-    """目立つ売り（$100K 以上）と外部流出の即時通知。買いと同じ体裁"""
+    """目立つ売り（$100K 以上）の即時通知。買いと同じ体裁。
+       外部流出（クラスター外のウォレット・取引所などへ送金）は以後追えず売却リスクが高いので、安全側に倒して売り扱い（藤沼さん判断 2026-09-08）"""
     lines = []
     for a in sells:
         who = names.get(a["wallet"], a["wallet"][:6]); t = jst(a["last"]).strftime("%m-%d %H:%M")
         times = f"、{a['n']}回" if a["n"] > 1 else ""
-        lines.append(f"🔻 売り  {who}  {symc(a['sym'], a['chain'])} {fmt_qty(a['amount'])} ≈ {fmt_usd(a['value'])}\n"
+        lines.append(f"🔻 売り  {who}  {symc(a['sym'], a['chain'])} {fmt_qty(a['amount'])} ≈ {fmt_usd(a['value'])}{share_text(a['value'], ctx)}\n"
                      f"   受取 {other_leg_text(a)}{times}  {t} JST")
         link = dex_link(a["chain"], a["contract"], ctx)
         if link: lines.append(f"   {link}")
     for a in outs:
         who = names.get(a["wallet"], a["wallet"][:6]); t = jst(a["last"]).strftime("%m-%d %H:%M")
-        lines.append(f"📤 外部流出  {who}  {symc(a['sym'], a['chain'])} {fmt_qty(a['amount'])} ≈ {fmt_usd(a['value'])} → クラスター外  {t} JST")
+        lines.append(f"🔻 売り扱い（外部流出）  {who}  {symc(a['sym'], a['chain'])} {fmt_qty(a['amount'])} ≈ {fmt_usd(a['value'])}{share_text(a['value'], ctx)}\n"
+                     f"   クラスター外へ送金（取引所等の可能性、以後追跡不能）  {t} JST")
+        link = dex_link(a["chain"], a["contract"], ctx)
+        if link: lines.append(f"   {link}")
     return lines
 
 def daily_report_text(br, names, ctx, day_label, big_usd=100000.0, pages=""):
@@ -331,13 +342,16 @@ def daily_report_text(br, names, ctx, day_label, big_usd=100000.0, pages=""):
          f"総資産 {fmt_usd(br['total1'])}（{fmt_usd(br['total1'] - br['total0'], True)} / {fmt_pct(br['total_pct'])}）　リスク {fmt_usd(br['risk1'])}　準現金 {fmt_usd(br['quasi1'])}　現金 {fmt_usd(br['cash1'])}",
          f"リスク資産 {fmt_usd(br['risk0'])} → {fmt_usd(br['risk1'])}：値動き {fmt_usd(br['price'], True)} / 利確 {fmt_usd(-br['realized'], True)} / 買い {fmt_usd(br['buys'], True)}"]
     buys = [a for a in br["buy_list"] if a["value"] >= big_usd]
-    sells = [a for a in br["sell_list"] + br["out_list"] + br["cash_out_list"] if a["value"] >= big_usd]
+    sells = [a for a in br["sell_list"] if a["value"] >= big_usd]
+    outs = [a for a in br["out_list"] + br["cash_out_list"] if a["value"] >= big_usd]      # 外部流出は売り扱い（以後追跡不能）
     ups = [m for m in br["movers"] if m["usd"] >= big_usd]; downs = [m for m in br["movers"] if m["usd"] <= -big_usd]
-    if buys: L.append("🟢 大きな買い: " + "、".join(f"{names.get(a['wallet'], '?')} {symc(a['sym'], a['chain'])} {fmt_qty(a['amount'])} ≈ {fmt_usd(a['value'])}" for a in buys[:5]))
-    if sells: L.append("🔻 大きな売り・流出: " + "、".join(f"{names.get(a['wallet'], '?')} {symc(a['sym'], a['chain'])} {fmt_qty(a['amount'])} ≈ {fmt_usd(a['value'])}" for a in sells[:5]))
+    sctx = {**ctx, "total_usd": br["total0"]}     # 比率の分母は期首の総資産
+    def item(a, tag=""): return f"{names.get(a['wallet'], '?')} {symc(a['sym'], a['chain'])} {fmt_qty(a['amount'])} ≈ {fmt_usd(a['value'])}{share_text(a['value'], sctx)}{tag}"
+    if buys: L.append("🟢 大きな買い: " + "、".join(item(a) for a in buys[:5]))
+    if sells or outs: L.append("🔻 大きな売り: " + "、".join([item(a) for a in sells[:5]] + [item(a, "［外部流出→売り扱い］") for a in outs[:5]]))
     if downs: L.append("📉 大きな値下がり: " + "、".join(f"{symc(m['sym'], m.get('chain', ''))} {m['pct']:+.1f}%（{fmt_usd(m['usd'], True)}）" for m in downs[:5]))
     if ups: L.append("📈 大きな値上がり: " + "、".join(f"{symc(m['sym'], m.get('chain', ''))} {m['pct']:+.1f}%（{fmt_usd(m['usd'], True)}）" for m in ups[:5]))
-    if not (buys or sells or ups or downs): L.append(f"{fmt_usd(big_usd)} 以上の大きな動きはなし")
+    if not (buys or sells or outs or ups or downs): L.append(f"{fmt_usd(big_usd)} 以上の大きな動きはなし")
     if pages and "<" not in pages: L.append(f"詳細: {pages}")
     return "\n".join(L)
 
