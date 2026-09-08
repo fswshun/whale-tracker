@@ -83,7 +83,10 @@ MIN_LIQ_USD = 5000     # DexScreener の流動性がこれ未満のペアの価�
 BUY_ALERT_USD = float(CFG.get("buy_alert_usd", 5000))        # 買いはこの額から即時 Telegram
 MOVE_MIN_USD = float(CFG.get("move_min_usd", 5000))          # 一覧・まとめに載せる最小額
 PRICE_ALERT_PCT = float(CFG.get("price_move_alert_pct", 5))  # 1時間でリスク資産がこの%動いたらまとめを送る
-DAILY_HOUR_UTC = int(CFG.get("daily_report_hour_utc", 0))    # 日次レポート時刻（0 UTC = 9:00 JST）
+DAILY_HOUR_UTC = int(CFG.get("daily_report_hour_utc", 15))   # 1日の締め＝日次レポート時刻（15 UTC = 24:00 JST。1日1通、1日の終わりに）
+SELL_ALERT_USD = float(CFG.get("sell_alert_usd", 100000))    # 目立つ売り・外部流出はこの額から即時 Telegram
+DAILY_BIG_USD = float(CFG.get("daily_big_move_usd", 100000))  # 日次レポートに載せる「大きな動き」（買い / 売り / 値動き）の最小額
+P.CUT_OFF = DAILY_HOUR_UTC * 3600                             # portfolio の時点計算（締め時刻）と共有
 PEER_REPOS = CFG.get("peer_repos", ["fswshun/whale-tracker", "fswshun/whale-unipcs", "fswshun/whale-avast", "fswshun/whale-kyle"])   # 同時買い検出の相手
 CROSS_MIN_USD = float(CFG.get("cross_buy_min_usd", 5000))    # 同時買いに数える最小額（1人あたり）
 NEW_TOKEN_H = float(CFG.get("new_token_hours", 24))            # 上場からこの時間以内の銘柄を執行サービス経由で少額受け取った場合は「新規トークン受取」（エアドロップ疑い）
@@ -101,7 +104,7 @@ INITIAL_LOOKBACK_H = float(CFG.get("initial_lookback_hours", 120))   # 初回・
 HOLDINGS_EVERY = int(CFG.get("holdings_every_n_runs", 4))            # 残高更新の間隔（実行回数）
 SECONDARY_EVERY = int(CFG.get("secondary_chains_every_n_runs", 4))   # 副次チェーン(ETH/Base/Arb)の取得間隔（実行回数）
 PRIMARY_CHAINS = set(CFG.get("primary_chains", ["robinhood", "bsc", "solana"]))    # 毎回取得するチェーン
-WHALE_NAME = WHALE_NAME or CFG.get("name", "")
+WHALE_NAME = WHALE_NAME or CFG.get("name", "") or "メインクジラ"   # 名前の無いリポ（第1クジラ）は「メインクジラ」。通知の頭に必ず付く
 NOTIFY_MAX_AGE_H = float(CFG.get("notify_max_age_hours", 48))        # これより古いイベントは通知しない（初回バックフィル対策）
 CHILD_MAX_AGE_D = float(CFG.get("child_detect_max_age_days", 30))    # これより古い送金からは子ウォレットを起こさない
 MAX_WALLETS = int(CFG.get("max_wallets", 40))                        # クラスターの上限（超えたら自動追加を止めて警告）
@@ -1079,8 +1082,14 @@ def run():
     prev = jload(DATA / "holdings.json", {"updated": None, "holdings": {}})
     # 欠けキーの判定は下の取得ループと同じ条件（そのウォレットが活動するチェーン or 本体）。ずれると毎回「欠けあり」になり残高更新が毎回走る（本体で発生していた）
     need = state["run_count"] % HOLDINGS_EVERY == 1 or not prev["holdings"] or prev.get("version") != 3 or any(f"{ch}:{w}" not in prev["holdings"] for w in wallets for ch in active if addr_fits(ch, w) and (ch in wallets[w]["chains"] or wallets[w]["role"] == "本体"))
-    nowdt = datetime.now(timezone.utc); today = nowdt.strftime("%Y-%m-%d")
-    state["daily_due"] = state.get("last_daily") != today and nowdt.hour >= DAILY_HOUR_UTC
+    nowdt = datetime.now(timezone.utc)
+    due = P.last_cut(nowdt.timestamp())                                  # 直近の締め時刻（既定 24:00 JST）
+    last_done = state.get("last_daily_cut")
+    if last_done is None and state.get("last_daily"):                    # 旧形式（UTC 日付 ＝ 00:00 UTC 締め）からの引き継ぎ
+        try: last_done = int(datetime.strptime(state["last_daily"], "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp())
+        except Exception: last_done = 0
+    state["daily_cut"] = due
+    state["daily_due"] = (last_done or 0) < due                          # その締めの日次をまだ送っていなければ送る
     if state["daily_due"]: need = True                                   # 日次レポートの時点は必ず実残高で
     if need and over_budget(): warn("時間予算超過 → 残高更新は次回"); need = False
     if need:
@@ -1161,7 +1170,7 @@ def main_holding_of(contract, holdings):
 
 # ------------------------------------------------------------ Telegram
 def tg(text):
-    if WHALE_NAME: text = f"[{WHALE_NAME}] " + text
+    if WHALE_NAME: text = f"【{WHALE_NAME}】" + text     # 誰のクジラの通知かを毎回先頭に（藤沼さん要望: 見た瞬間に分かるように）
     if DRY_RUN: log("[DRY_RUN] Telegram:\n" + text); return
     if not (TG_TOKEN and TG_CHAT): warn("TG_TOKEN/TG_CHAT 未設定のため通知スキップ"); return
     for i in range(0, len(text), 3800):
@@ -1169,15 +1178,19 @@ def tg(text):
         if not r.ok: warn("Telegram 送信失敗:", r.status_code, r.text[:200])
 
 def notify(new_events, holdings):
-    """(1) 買い ≥ BUY_ALERT_USD と新ウォレット検出は即時
-       (2) 残高更新した回（1時間ごと）は前回時点との差を「まとめ」で（動きがあった時だけ）
-       (3) 日次（DAILY_HOUR_UTC）は前日 9:00 JST 比の分解を必ず送る"""
+    """Telegram の設計（2026-09-08 藤沼さん要望で再整理）
+       (1) 即時: 買い ≥ BUY_ALERT_USD（DexScreener 付き）、目立つ売り・外部流出 ≥ SELL_ALERT_USD、新ウォレット検出、複数クジラ同時買い
+       (2) 日次: 1日1通、締め時刻（既定 24:00 JST）に「総資産の推移」と「≥ DAILY_BIG_USD の大きな動き（買い / 売り / 値動き）」だけ
+       ※ 1時間ごとの「まとめ」と日次内の「新規銘柄の成績」は廃止（台帳ページで見る）"""
     names = P.role_names(wallets); pages = CFG.get("pages_url", "")
     cutoff = time.time() - NOTIFY_MAX_AGE_H * 3600
     recent = [e for e in new_events if e["ts"] >= cutoff]
     lines = []
     buys = P.group_trades(recent, "buy", CTX, BUY_ALERT_USD)
     if buys: lines += P.buy_alert_lines(buys, names, CTX)
+    sells = P.group_trades(recent, "sell", CTX, SELL_ALERT_USD)
+    outs = P.group_trades([e for e in recent if P.bucket_of(e["chain"], e["contract"], CTX) == "risk"], "out", CTX, SELL_ALERT_USD)
+    if sells or outs: lines += P.sell_alert_lines(sells, outs, names, CTX)
     for e in recent:
         if e["kind"] == "新ウォレット開設(ガス種銭)":
             lines.append(f"🆕 新ウォレット {names.get(e['cp'], '?')} を検出（{names.get(e['wallet'], '?')} から種銭 {e['amount']:.4f} {e['token']}）→ 監視に追加")
@@ -1188,27 +1201,18 @@ def notify(new_events, holdings):
         log("即時通知なし")
     try: cross_whale_alert(pages)
     except Exception as e: warn(f"同時買い検出でエラー: {e!r}")
-    # 日次
+    # 日次（1日1通）
     if state.get("daily_due"):
-        pts = P.cutoff_points(snapshots)
-        if len(pts) >= 2:
-            br = P.bridge(pts[-2], pts[-1], events, CTX, MOVE_MIN_USD)
-            body = P.digest_text(br, names, CTX, f"📊 日次レポート {P.jst(pts[-1]['ts']).strftime('%m/%d %H:%M')} JST（{pts[-2]['label']} → {pts[-1]['label']}）", "")
-            npt = P.new_positions_text(P.new_positions(events, snapshots, CTX, days=int(CFG.get("new_positions_days", 14)), min_cost=float(CFG.get("buy_list_min_usd", 1000))), names)
-            tg(body + ("\n" + npt if npt else "") + (f"\n詳細: {pages}" if pages and "<" not in pages else ""))
+        due = state["daily_cut"]; pts = P.cutoff_points(snapshots)
+        p1 = next((p for p in pts if p.get("cut") and p["ts"] == due), None) or (pts[-1] if pts else None)
+        prev = [p for p in pts if p1 and p["ts"] < p1["ts"] and (p.get("cut") or p["label"].startswith("開始"))]
+        if p1 and prev:
+            br = P.bridge(prev[-1], p1, events, CTX, MOVE_MIN_USD)
+            tg(P.daily_report_text(br, names, CTX, P.cut_date(due).strftime("%-m/%-d"), DAILY_BIG_USD, pages))
         else:
-            tg(f"📊 日次レポート: 記録開始。明日 9:00 JST から前日比（値動き / 利確 / 買い）を送ります。現在の総資産 {P.fmt_usd(snapshots[-1]['total']) if snapshots else '—'}")
+            tg(f"📊 日次レポート: 記録開始。次の締め（{P.cut_desc()}）から1日の推移と大きな動きを送ります。現在の総資産 {P.fmt_usd(snapshots[-1]['total']) if snapshots else '—'}")
+        state["last_daily_cut"] = due
         state["last_daily"] = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        return
-    # 1時間まとめ（残高を更新した回だけ、動きがあった時だけ）
-    if state.get("holdings_refreshed") and len(snapshots) >= 2:
-        p0 = {"label": P.jst(snapshots[-2]["ts"]).strftime("%H:%M"), "snap": snapshots[-2]}
-        p1 = {"label": P.jst(snapshots[-1]["ts"]).strftime("%H:%M"), "snap": snapshots[-1]}
-        br = P.bridge(p0, p1, events, CTX, MOVE_MIN_USD)
-        if P.notable(br, MOVE_MIN_USD, PRICE_ALERT_PCT):
-            tg(P.digest_text(br, names, CTX, f"🕐 まとめ {p0['label']}→{p1['label']} JST", pages))
-        else:
-            log(f"1時間まとめ: 動きなし（利確 {br['realized']:.0f} / 買い {br['buys']:.0f} / 値動き {br['price']:.0f}）")
 
 # ------------------------------------------------------------ 複数クジラの同時買い（超重要コール）
 def cross_whale_alert(pages):
@@ -1281,6 +1285,7 @@ def html(holdings_doc):
     timeline = {"points": pts, "bridges": bridges, "names": P.role_names(wallets), "ctx": CTX, "min_usd": MOVE_MIN_USD, "buy_list_min_usd": float(CFG.get("buy_list_min_usd", 1000)), "new_positions": newpos, "matrix": matrix}
     timeline["name"] = WHALE_NAME
     timeline["stale"] = holdings_doc.get("stale") if isinstance(holdings_doc, dict) else None
+    timeline["cut_desc"] = P.cut_desc()
     render(CFG, CHAINS, wallets, events, hd, batches(events), THRESHOLD, label, out, holdings_updated=upd, timeline=timeline)
     log("HTML 生成:", out)
 
@@ -1301,6 +1306,6 @@ if __name__ == "__main__":
         notify(new_events, holdings_doc["holdings"])
     finally:
         if not DRY_RUN:   # notify() が更新する last_daily を必ず保存（run() の保存は notify 前なので）
-            for k in ("daily_due", "holdings_refreshed"): state.pop(k, None)
+            for k in ("daily_due", "daily_cut", "holdings_refreshed"): state.pop(k, None)
             json.dump(state, open(DATA / "state.json", "w"), indent=2)
     html(holdings_doc)

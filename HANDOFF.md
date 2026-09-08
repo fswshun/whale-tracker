@@ -12,10 +12,12 @@
 - **データ源（全部無料枠）**: Blockscout PRO（Robinhood 4663 / ETH / Base / Arb）、NodeReal（本体・unipcs の BSC）、Alchemy（avast・kyle の BSC、internal tx 非対応）、Helius（Solana）、DexScreener（価格）
 - **キー**: 各リポの GitHub Secrets。ローカル検証用の値は `keys.local.json`（gitignore 済み）
 
-## 通知（Telegram @fswshun_whale_bot、chat 479438233、`[名前]` 付き）
+## 通知（Telegram @fswshun_whale_bot、chat 479438233、先頭に `【名前】`。第1クジラは「メインクジラ」）
 - 🟢 買い ≥$5,000 即時（支払額ベース・平均取得・いまの価格・流動性・DexScreener）
+- 🔻 売り / 📤 外部流出 ≥$100,000 即時（`sell_alert_usd`）
 - 🚨🚨 複数クジラが同日に同一銘柄を ≥$5,000 ずつ購入（最後に買ったクジラのリポが送信、人数が増えたら再送。同じ送り主から複数クジラへ30分以内の少額配布は除外）
-- 🕐 1時間まとめ（動きがあった時だけ）、📊 毎朝 9:00 JST 日次（前日比の分解＋新規銘柄成績）
+- 📊 日次: 1日1通、締め 24:00 JST（`daily_report_hour_utc`=15）。総資産の推移 ＋ ≥$100,000 の大きな動き（買い / 売り・流出 / 値上がり / 値下がり）だけ（`daily_big_move_usd`）
+- **廃止（2026-09-08 藤沼さん要望）**: 1時間まとめ、日次内の新規銘柄成績。締め時刻は `portfolio.CUT_OFF` で時点計算（チャート・日次・剪定）と共有。日次の送信済み判定は `state.last_daily_cut`（締め時刻の epoch）
 
 ## 判定ルールの要点（罠の記録）
 - 残高はコントラクトでキー管理（同名偽トークン対策）。Blockscout/Alchemy の一覧は漏れるので、取引履歴→価格あり→balanceOf で補完

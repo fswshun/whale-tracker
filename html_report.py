@@ -55,7 +55,7 @@ def nice_ticks(vmax, n=4):
 
 def chart_svg(points):
     """2系列の折れ線。W=720,H=260。データは JS 用にも埋め込む"""
-    if len(points) < 2: return "<div class='sub'>推移グラフは時点が2つ以上たまってから表示します（明日 9:00 以降）。</div>"
+    if len(points) < 2: return "<div class='sub'>推移グラフは時点が2つ以上たまってから表示します（次の締め時刻以降）。</div>"
     W, H, L, R, T, B = 720, 260, 64, 120, 16, 34
     xs = [p["ts"] for p in points]; tot = [p["snap"]["total"] for p in points]; rsk = [p["snap"]["risk"] for p in points]
     vmax = max(tot + rsk) * 1.08; ticks = nice_ticks(vmax); ymax = ticks[-1]
@@ -171,7 +171,7 @@ def chain_breakdown(snap, chains):
 def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label, out_path, holdings_updated=None, timeline=None):
     now = datetime.now(timezone.utc)
     tl = timeline or {}; pts = tl.get("points") or []; bridges = tl.get("bridges") or []; names = tl.get("names") or {}; ctx = tl.get("ctx") or {"chains": chains, "known_stables": set()}
-    min_usd = float(tl.get("min_usd") or 5000)
+    min_usd = float(tl.get("min_usd") or 5000); cut = tl.get("cut_desc") or "24:00 JST"
     # --- 上段: ヒーロー ---
     cur = pts[-1]["snap"] if pts else None
     if cur:
@@ -190,14 +190,14 @@ def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label,
                 + "</section>")
     else:
         hero = "<section class='panel hero'><div class='sub'>残高スナップショットがまだありません。次回の実行で作成されます。</div></section>"
-    chart = f"<section class='panel'><h2>資産の推移（毎日 9:00 JST 時点）</h2>{chart_svg(pts)}</section>"
+    chart = f"<section class='panel'><h2>資産の推移（毎日 {esc(cut)} 時点）</h2>{chart_svg(pts)}</section>"
     # --- 日ごとの増減 ---
     if bridges:
         tabs = "".join(f"<button class='tab' data-target='day-{i}' aria-selected='{'true' if i == 0 else 'false'}'>{esc(br['label1'])}</button>" for i, br in enumerate(reversed(bridges)))
         panels = "".join(bridge_panel(br, names, ctx, i, min_usd, float(tl.get("buy_list_min_usd") or 1000)) for i, br in enumerate(reversed(bridges)))
         days = f"<section class='panel'><h2>時点ごとの増減（値動き / 利確 / 買い に分解）</h2><div class='tabs'>{tabs}</div>{panels}</section>"
     else:
-        days = "<section class='panel'><h2>時点ごとの増減</h2><div class='sub'>明日 9:00 JST の時点から、前日比の分解（値動き / 利確 / 買い）を表示します。</div></section>"
+        days = f"<section class='panel'><h2>時点ごとの増減</h2><div class='sub'>次の締め（{esc(cut)}）から、前日比の分解（値動き / 利確 / 買い）を表示します。</div></section>"
     # --- 新規購入銘柄の成績（別出し） ---
     newpos = tl.get("new_positions") or []
     if newpos:
@@ -255,7 +255,7 @@ def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label,
                         cells += f"<td class='r'>{esc(P.fmt_qty(v))}<div class='sub'>前日 {esc(dtxt(d1))} · 累計 {esc(dtxt(d0))}</div></td>"
                 body += f"<tr><td>{esc(P.symc(r['sym'], r['chain']))}</td>{cells}</tr>"
             return f"<div class='mode' id='mode-{mode}'{'' if mode == 'usd' else ' hidden'} style='overflow-x:auto'><table><thead><tr><th>銘柄</th>{head}</tr></thead><tbody>{body}</tbody></table></div>"
-        matrix_html = ("<section class='panel'><h2>銘柄別の日次推移（各セルに 前日比 と 開始日からの累計 を表示。毎日 9:00 JST 時点）</h2>"
+        matrix_html = (f"<section class='panel'><h2>銘柄別の日次推移（各セルに 前日比 と 開始日からの累計 を表示。毎日 {esc(cut)} 時点）</h2>"
                        "<div class='tabs'><button class='tab mtab' data-target='mode-usd' aria-selected='true'>評価額</button><button class='tab mtab' data-target='mode-px' aria-selected='false'>単価</button><button class='tab mtab' data-target='mode-amt' aria-selected='false'>枚数</button></div>"
                        + table("usd") + table("px") + table("amt")
                        + f"<div class='sub'>対象＝現在の評価額上位 {len([r for r in mx['rows']])} 銘柄＋直近14日の新規購入銘柄。「推定」の列は記録開始前を取引から逆算したもので単価は 9/6 朝の値。累計の起点は {esc(P_[0]['label'])}。</div></section>")
@@ -290,7 +290,7 @@ def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label,
            f"<section class='panel'><h2>売却バッチ（30分以内の連続スワップを合算）</h2><table><thead><tr><th>開始(JST) – 終了(UTC)</th><th>誰</th><th>銘柄</th><th class='r'>回数</th><th class='r'>数量</th><th class='r'>USD</th></tr></thead><tbody>{brows or '<tr><td colspan=6 class=sub>なし</td></tr>'}</tbody></table></section></div>"
            f"<section class='panel'><h2>主要イベント（${threshold:,.0f} 以上・新ウォレット）</h2><div style='overflow-x:auto'><table><thead><tr><th>時刻(JST)</th><th>誰</th><th>種別</th><th>方向</th><th>銘柄</th><th class='r'>数量</th><th class='r'>USD</th><th>相手</th></tr></thead><tbody>{erows or '<tr><td colspan=8 class=sub>なし</td></tr>'}</tbody></table></div></section></details>")
     rules = ("<section class='panel'><h2>読み方</h2><div class='sub'>"
-             "<p>リスク資産＝アルトコイン。準現金＝ETH・BNB。現金＝本物のステーブル。時点は毎日 9:00 JST（00:00 UTC）と現在。</p>"
+             f"<p>リスク資産＝アルトコイン。準現金＝ETH・BNB。現金＝本物のステーブル。時点は毎日 {esc(cut)} の締めと現在。</p>"
              "<p>値動き＝前時点の保有数量 × 価格差。利確＝リスク資産を売って受け取った額（ETH・USDC・別銘柄）＋クラスター外へ送った額。買い＝リスク資産を買うのに支払った額（スワップ・クロスチェーン購入）。約定コスト＝支払った額と受け取った銘柄の時価の差（流動性の薄い銘柄を大量に買うと大きくなる）。誤差＝この分解で説明できない残り（エアドロップ、価格取得漏れなど）。</p>"
              "<p>本体・子・孫の間の移動は総資産を変えないので内部移動として折りたたみ。$5,000 未満の動きは集計には含むが一覧には出さない。</p></div></section>")
     doc = f"""<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">

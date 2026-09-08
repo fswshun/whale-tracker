@@ -20,6 +20,16 @@ def L(a):
     return a.lower() if a.startswith("0x") else a
 JST = timezone(timedelta(hours=9))
 DAY = 86400
+CUT_OFF = 0          # 1日の締め時刻（UTC 0:00 からの秒数）。tracker が config の daily_report_hour_utc から設定する（15*3600 = 24:00 JST）
+def next_cut(ts): return int(((ts - CUT_OFF) // DAY + 1) * DAY + CUT_OFF)      # ts より後の最初の締め時刻
+def last_cut(ts): return int(((ts - CUT_OFF) // DAY) * DAY + CUT_OFF)          # ts 以前の最後の締め時刻
+def cut_date(c): return datetime.fromtimestamp(c - 1, JST)                      # 締め時刻が属する日（24:00 JST 締めなら前日扱い）
+def cut_label(c):
+    j = datetime.fromtimestamp(c, JST)
+    return cut_date(c).strftime("%-m/%-d") + " 24:00" if (j.hour, j.minute) == (0, 0) else j.strftime("%-m/%-d %H:%M")
+def cut_desc():
+    j = datetime.fromtimestamp(CUT_OFF, timezone.utc).astimezone(JST)
+    return "24:00 JST" if (j.hour, j.minute) == (0, 0) else j.strftime("%H:%M JST")
 ROLE_ORDER = {"本体": 0, "子": 1, "孫": 2, "曾孫": 3}
 SWAP_KINDS = {"購入(スワップ)", "売却(スワップ)", "売却(スワップ・代金不明)", "スワップ"}
 SERVICE_IN_KINDS = {"購入(クロスチェーン)", "受取(原資未確認)", "サービスから受取"}
@@ -159,8 +169,8 @@ def prune_snapshots(snaps, keep_hourly_days=7):
     if not snaps: return snaps
     now = snaps[-1]["ts"]; keep = []; seen_cut = set()
     for s in reversed(snaps):
-        if now - s["ts"] <= keep_hourly_days * DAY or s.get("approx") or s["ts"] % DAY == 0: keep.append(s); continue   # 推定点・00:00 UTC ちょうどの点は常に残す
-        cut = (s["ts"] // DAY + 1) * DAY        # この時点が属する日の次の 00:00 UTC
+        if now - s["ts"] <= keep_hourly_days * DAY or s.get("approx") or (s["ts"] - CUT_OFF) % DAY == 0: keep.append(s); continue   # 推定点・締め時刻ちょうどの点は常に残す
+        cut = next_cut(s["ts"])                 # この時点が属する日の締め時刻
         if cut not in seen_cut: seen_cut.add(cut); keep.append(s)
     return sorted(keep, key=lambda s: s["ts"])
 
@@ -169,20 +179,26 @@ def save_snapshots(path, snaps):
         for s in snaps: f.write(json.dumps(s, ensure_ascii=False) + "\n")
 
 def cutoff_points(snaps, n=30):
-    """00:00 UTC(9:00 JST) ごとの時点 + 現在。各時点はその直前(6時間以内)のスナップショット"""
+    """1日の締め時刻（CUT_OFF、既定 24:00 JST）ごとの時点 + 現在。各時点はその締めに最も近いスナップショット（6時間前〜30分後）。
+       記録開始前の推定点（approx）は締め時刻に関係なくそのまま時点として残す"""
     if not snaps: return []
-    first, last = snaps[0]["ts"], snaps[-1]["ts"]; pts = []
-    c = (first // DAY + 1) * DAY
-    if c - first > 6 * 3600:   # 記録開始から最初の 00:00 UTC まで 6 時間以上あく場合だけ「開始」時点を置く（初日の日次レポート用）
-        pts.append({"ts": first, "label": jst(first).strftime("開始 %-m/%-d %H:%M"), "date": jst(first).strftime("%Y-%m-%d"), "snap": snaps[0]})
-    while c <= last + 900:
-        cand = [s for s in snaps if c - 6 * 3600 <= s["ts"] <= c + 900]
-        if cand:
-            s = min(cand, key=lambda s: abs(s["ts"] - c))
-            pts.append({"ts": c, "label": jst(c).strftime("%-m/%-d 9:00") + ("(推定)" if s.get("approx") else ""), "date": jst(c).strftime("%Y-%m-%d"), "snap": s})
-        c += DAY
-    if not pts or pts[-1]["snap"]["ts"] != last:
-        pts.append({"ts": last, "label": "現在", "date": "now", "snap": snaps[-1]})
+    pts = [{"ts": s["ts"], "label": jst(s["ts"]).strftime("%-m/%-d %H:%M") + "(推定)", "date": cut_date(next_cut(s["ts"])).strftime("%Y-%m-%d"), "snap": s, "cut": True}
+           for s in snaps if s.get("approx")]
+    real = [s for s in snaps if not s.get("approx")]
+    if real:
+        first, last = real[0]["ts"], real[-1]["ts"]
+        c = next_cut(first)
+        if c - first > 6 * 3600:   # 記録開始から最初の締めまで 6 時間以上あく場合だけ「開始」時点を置く（初日のレポート用）
+            pts.append({"ts": first, "label": jst(first).strftime("開始 %-m/%-d %H:%M"), "date": jst(first).strftime("%Y-%m-%d"), "snap": real[0]})
+        while c <= last + 1800:
+            cand = [s for s in real if c - 6 * 3600 <= s["ts"] <= c + 1800]
+            if cand:
+                s = min(cand, key=lambda s: abs(s["ts"] - c))
+                pts.append({"ts": c, "label": cut_label(c), "date": cut_date(c).strftime("%Y-%m-%d"), "snap": s, "cut": True})
+            c += DAY
+    pts.sort(key=lambda p: p["ts"])
+    if not pts or pts[-1]["snap"]["ts"] != snaps[-1]["ts"]:
+        pts.append({"ts": snaps[-1]["ts"], "label": "現在", "date": "now", "snap": snaps[-1]})
     return pts[-n:]
 
 # ------------------------------------------------------------ 増減の分解
@@ -293,6 +309,37 @@ def buy_alert_lines(buys, names, ctx):
         link = dex_link(a["chain"], a["contract"], ctx)
         if link: lines.append(f"   {link}")
     return lines
+
+def sell_alert_lines(sells, outs, names, ctx):
+    """目立つ売り（$100K 以上）と外部流出の即時通知。買いと同じ体裁"""
+    lines = []
+    for a in sells:
+        who = names.get(a["wallet"], a["wallet"][:6]); t = jst(a["last"]).strftime("%m-%d %H:%M")
+        times = f"、{a['n']}回" if a["n"] > 1 else ""
+        lines.append(f"🔻 売り  {who}  {symc(a['sym'], a['chain'])} {fmt_qty(a['amount'])} ≈ {fmt_usd(a['value'])}\n"
+                     f"   受取 {other_leg_text(a)}{times}  {t} JST")
+        link = dex_link(a["chain"], a["contract"], ctx)
+        if link: lines.append(f"   {link}")
+    for a in outs:
+        who = names.get(a["wallet"], a["wallet"][:6]); t = jst(a["last"]).strftime("%m-%d %H:%M")
+        lines.append(f"📤 外部流出  {who}  {symc(a['sym'], a['chain'])} {fmt_qty(a['amount'])} ≈ {fmt_usd(a['value'])} → クラスター外  {t} JST")
+    return lines
+
+def daily_report_text(br, names, ctx, day_label, big_usd=100000.0, pages=""):
+    """1日1通の日次レポート: 総資産の推移 と $100K 以上の大きな動き（買い / 売り / 値動き）だけ。細かい内訳は載せない"""
+    L = [f"📊 日次レポート {day_label}（{br['label0']} → {br['label1']}）",
+         f"総資産 {fmt_usd(br['total1'])}（{fmt_usd(br['total1'] - br['total0'], True)} / {fmt_pct(br['total_pct'])}）　リスク {fmt_usd(br['risk1'])}　準現金 {fmt_usd(br['quasi1'])}　現金 {fmt_usd(br['cash1'])}",
+         f"リスク資産 {fmt_usd(br['risk0'])} → {fmt_usd(br['risk1'])}：値動き {fmt_usd(br['price'], True)} / 利確 {fmt_usd(-br['realized'], True)} / 買い {fmt_usd(br['buys'], True)}"]
+    buys = [a for a in br["buy_list"] if a["value"] >= big_usd]
+    sells = [a for a in br["sell_list"] + br["out_list"] + br["cash_out_list"] if a["value"] >= big_usd]
+    ups = [m for m in br["movers"] if m["usd"] >= big_usd]; downs = [m for m in br["movers"] if m["usd"] <= -big_usd]
+    if buys: L.append("🟢 大きな買い: " + "、".join(f"{names.get(a['wallet'], '?')} {symc(a['sym'], a['chain'])} {fmt_qty(a['amount'])} ≈ {fmt_usd(a['value'])}" for a in buys[:5]))
+    if sells: L.append("🔻 大きな売り・流出: " + "、".join(f"{names.get(a['wallet'], '?')} {symc(a['sym'], a['chain'])} {fmt_qty(a['amount'])} ≈ {fmt_usd(a['value'])}" for a in sells[:5]))
+    if downs: L.append("📉 大きな値下がり: " + "、".join(f"{symc(m['sym'], m.get('chain', ''))} {m['pct']:+.1f}%（{fmt_usd(m['usd'], True)}）" for m in downs[:5]))
+    if ups: L.append("📈 大きな値上がり: " + "、".join(f"{symc(m['sym'], m.get('chain', ''))} {m['pct']:+.1f}%（{fmt_usd(m['usd'], True)}）" for m in ups[:5]))
+    if not (buys or sells or ups or downs): L.append(f"{fmt_usd(big_usd)} 以上の大きな動きはなし")
+    if pages and "<" not in pages: L.append(f"詳細: {pages}")
+    return "\n".join(L)
 
 def digest_text(br, names, ctx, title, pages="", max_items=4):
     L = [title, f"総資産 {fmt_usd(br['total1'])}（{fmt_usd(br['total1'] - br['total0'], True)} / {fmt_pct(br['total_pct'])}）"

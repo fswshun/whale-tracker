@@ -1,4 +1,5 @@
 {
+  "name": "メインクジラ",
   "main_wallets": [
     "0xDE52C75041371b5E08d8a50b82C63734850628C1"
   ],
@@ -12,7 +13,7 @@
   "buy_alert_usd": 5000,
   "move_min_usd": 5000,
   "price_move_alert_pct": 5,
-  "daily_report_hour_utc": 0,
+  "daily_report_hour_utc": 15,
   "pages_url": "https://fswshun.github.io/whale-tracker/",
   "initial_lookback_hours": 120,
   "holdings_every_n_runs": 6,
