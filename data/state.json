@@ -1,5 +1,5 @@
 {
-  "run_count": 214,
+  "run_count": 215,
   "last_daily": "2026-09-08",
   "cross_alerted": [
     [
@@ -1735,6 +1735,86 @@
       "note": "",
       "value": 124.2395,
       "unit": 2.0169856071609945e-05
+    },
+    "robinhood:0x326722c4dcf82a6cd35a354fa65449eb00fe364a:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
+      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
+      "chain": "robinhood",
+      "contract": "0x326722c4dcf82a6cd35a354fa65449eb00fe364a",
+      "sym": "unipcs",
+      "amount": 1539305.5393312764,
+      "usd": 762.4180336307811,
+      "counter_usd": 248.474,
+      "n": 1,
+      "other": {
+        "ETH": 0.1
+      },
+      "first": 1788910692,
+      "last": 1788910692,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 248.474,
+      "unit": 0.00016141954514627748
+    },
+    "robinhood:0x0d79109924bac69b96f31942a3fffd38a1683462:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
+      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
+      "chain": "robinhood",
+      "contract": "0x0d79109924bac69b96f31942a3fffd38a1683462",
+      "sym": "pointfarmcap",
+      "amount": 4858900.389193617,
+      "usd": 303.63268532070913,
+      "counter_usd": 248.474,
+      "n": 1,
+      "other": {
+        "ETH": 0.1
+      },
+      "first": 1788910800,
+      "last": 1788910800,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 248.474,
+      "unit": 5.113790777695625e-05
+    },
+    "robinhood:0x326722c4dcf82a6cd35a354fa65449eb00fe364a:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
+      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
+      "chain": "robinhood",
+      "contract": "0x326722c4dcf82a6cd35a354fa65449eb00fe364a",
+      "sym": "unipcs",
+      "amount": 1498037.4038882486,
+      "usd": 741.9779261458494,
+      "counter_usd": 248.474,
+      "n": 1,
+      "other": {
+        "ETH": 0.1
+      },
+      "first": 1788910692,
+      "last": 1788910692,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 248.474,
+      "unit": 0.00016586635243891133
+    },
+    "robinhood:0x0d79109924bac69b96f31942a3fffd38a1683462:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
+      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
+      "chain": "robinhood",
+      "contract": "0x0d79109924bac69b96f31942a3fffd38a1683462",
+      "sym": "pointfarmcap",
+      "amount": 4631032.226235731,
+      "usd": 289.3932038174708,
+      "counter_usd": 248.474,
+      "n": 1,
+      "other": {
+        "ETH": 0.1
+      },
+      "first": 1788910800,
+      "last": 1788910800,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 248.474,
+      "unit": 5.365412889859516e-05
     }
   },
   "last_daily_cut": 1788879600
