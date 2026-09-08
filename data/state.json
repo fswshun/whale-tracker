@@ -1,5 +1,5 @@
 {
-  "run_count": 203,
+  "run_count": 204,
   "last_daily": "2026-09-08",
   "cross_alerted": [
     [
@@ -1315,6 +1315,26 @@
       "note": "",
       "value": 198.6984,
       "unit": 3.306791281158857e-05
+    },
+    "ethereum:0xeb8d929b86de0b96cfd972ef3dba805423abf6cd:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
+      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
+      "chain": "ethereum",
+      "contract": "0xeb8d929b86de0b96cfd972ef3dba805423abf6cd",
+      "sym": "OHM",
+      "amount": 8276.662003789406,
+      "usd": 3280.8688183021213,
+      "counter_usd": 3724.1400000000003,
+      "n": 3,
+      "other": {
+        "ETH": 1.5
+      },
+      "first": 1788902171,
+      "last": 1788902219,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 3724.1400000000003,
+      "unit": 0.44995675772369725
     }
   },
   "last_daily_cut": 1788879600
