@@ -1,5 +1,5 @@
 {
-  "run_count": 175,
+  "run_count": 176,
   "last_daily": "2026-09-08",
   "cross_alerted": [
     [
@@ -413,17 +413,17 @@
       "runs": 1,
       "funding": 0.0,
       "note": "",
-      "value": 499.954,
-      "unit": 8.651051946908866e-05
+      "value": 500.4148,
+      "unit": 7.421542165743476e-05
     },
-    "robinhood:0xaa22bd7f1ac3bb0cb8e599b30eb7fe663f6d1ad7:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
-      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
+    "robinhood:0xaa22bd7f1ac3bb0cb8e599b30eb7fe663f6d1ad7:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
+      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
       "chain": "robinhood",
       "contract": "0xaa22bd7f1ac3bb0cb8e599b30eb7fe663f6d1ad7",
       "sym": "FLOW",
-      "amount": 6742733.3675988,
-      "usd": 141.5299733858988,
-      "counter_usd": 499.954,
+      "amount": 5779112.2174296975,
+      "usd": 51.156701348687676,
+      "counter_usd": 499.6096,
       "n": 1,
       "other": {
         "ETH": 0.2
@@ -433,8 +433,8 @@
       "runs": 1,
       "funding": 0.0,
       "note": "",
-      "value": 499.954,
-      "unit": 7.414708141989633e-05
+      "value": 499.6096,
+      "unit": 8.645092554063694e-05
     },
     "robinhood:0x8fe9cf31dda8883b224bf14fea53d17f3e099ed6:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
       "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
@@ -442,8 +442,8 @@
       "contract": "0x8fe9cf31dda8883b224bf14fea53d17f3e099ed6",
       "sym": "SAPIENS",
       "amount": 3819314.360132951,
-      "usd": 622.548240701671,
-      "counter_usd": 249.977,
+      "usd": 445.3320543915021,
+      "counter_usd": 249.8048,
       "n": 1,
       "other": {
         "ETH": 0.1
@@ -453,8 +453,8 @@
       "runs": 1,
       "funding": 0.0,
       "note": "",
-      "value": 249.977,
-      "unit": 6.545075278676414e-05
+      "value": 249.8048,
+      "unit": 6.540566616027497e-05
     },
     "robinhood:0x8fe9cf31dda8883b224bf14fea53d17f3e099ed6:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
       "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
@@ -462,8 +462,8 @@
       "contract": "0x8fe9cf31dda8883b224bf14fea53d17f3e099ed6",
       "sym": "SAPIENS",
       "amount": 3511729.6026248676,
-      "usd": 572.4119252278534,
-      "counter_usd": 249.977,
+      "usd": 409.4676716660596,
+      "counter_usd": 249.8048,
       "n": 1,
       "other": {
         "ETH": 0.1
@@ -473,8 +473,8 @@
       "runs": 1,
       "funding": 0.0,
       "note": "",
-      "value": 249.977,
-      "unit": 7.118344186100003e-05
+      "value": 249.8048,
+      "unit": 7.11344061949649e-05
     }
   },
   "last_daily_cut": 1788879600
