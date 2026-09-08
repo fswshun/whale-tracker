@@ -1,5 +1,5 @@
 {
-  "run_count": 164,
+  "run_count": 165,
   "last_daily": "2026-09-08",
   "cross_alerted": [
     [
@@ -117,66 +117,6 @@
       "sym": "GASTRA",
       "amount": 8235612.391689024,
       "usd": 0.0,
-      "counter_usd": 248.18400000000003,
-      "n": 1,
-      "other": {
-        "ETH": 0.1
-      },
-      "first": 1788877993,
-      "last": 1788877993,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 248.18400000000003,
-      "unit": 3.0135463909211554e-05
-    },
-    "robinhood:0xd91b287bbaa59c00e35b133ae2b29d606789aa1c:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
-      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
-      "chain": "robinhood",
-      "contract": "0xd91b287bbaa59c00e35b133ae2b29d606789aa1c",
-      "sym": "GASTRA",
-      "amount": 13104707.364567356,
-      "usd": 0.0,
-      "counter_usd": 248.18400000000003,
-      "n": 1,
-      "other": {
-        "ETH": 0.1
-      },
-      "first": 1788877992,
-      "last": 1788877992,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 248.18400000000003,
-      "unit": 1.8938538121884547e-05
-    },
-    "robinhood:0xc72f114386e513b926b023cb8df8a83609761974:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
-      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
-      "chain": "robinhood",
-      "contract": "0xc72f114386e513b926b023cb8df8a83609761974",
-      "sym": "CRUMBS",
-      "amount": 20803739.896709032,
-      "usd": 0.0,
-      "counter_usd": 148.9104,
-      "n": 1,
-      "other": {
-        "ETH": 0.06
-      },
-      "first": 1788876949,
-      "last": 1788876949,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 148.6278,
-      "unit": 7.144282746176403e-06
-    },
-    "robinhood:0xd91b287bbaa59c00e35b133ae2b29d606789aa1c:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
-      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
-      "chain": "robinhood",
-      "contract": "0xd91b287bbaa59c00e35b133ae2b29d606789aa1c",
-      "sym": "GASTRA",
-      "amount": 8235612.391689024,
-      "usd": 0.0,
       "counter_usd": 248.33400000000003,
       "n": 1,
       "other": {
@@ -209,6 +149,26 @@
       "note": "",
       "value": 248.33400000000003,
       "unit": 1.8949984390452555e-05
+    },
+    "robinhood:0xc72f114386e513b926b023cb8df8a83609761974:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
+      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
+      "chain": "robinhood",
+      "contract": "0xc72f114386e513b926b023cb8df8a83609761974",
+      "sym": "CRUMBS",
+      "amount": 20803739.896709032,
+      "usd": 0.0,
+      "counter_usd": 148.9104,
+      "n": 1,
+      "other": {
+        "ETH": 0.06
+      },
+      "first": 1788876949,
+      "last": 1788876949,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 148.9104,
+      "unit": 7.157866842180445e-06
     },
     "robinhood:0xb97d9e5ad6244d27588fe0a624a8c78e512934ee:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
       "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
@@ -250,5 +210,6 @@
       "value": 99.3336,
       "unit": 5.2172062747079384e-05
     }
-  }
+  },
+  "last_daily_cut": 1788879600
 }
