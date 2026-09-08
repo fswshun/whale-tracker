@@ -1,10 +1,10 @@
 # whale-tracker
 
-クジラウォレット群（本体＋自動検出した子・孫）の資産を 10 分ごとに追跡し、**買いは即時 Telegram**、利確・値動きは 1 時間ごとのまとめと毎朝 9:00 JST の日次レポートで通知、GitHub Pages に資産レポートを公開します。
+クジラウォレット群（本体＋自動検出した子・孫）の資産を 10 分ごとに追跡し、**買い（$5,000〜）と目立つ売り（$100,000〜）は即時 Telegram**、1日1通の日次レポート（24:00 JST）で総資産の推移と大きな動きを通知、GitHub Pages に資産レポートを公開します。
 
 - 本体ウォレットの送受信を Robinhood Chain / BSC（毎回）＋ Ethereum / Base（1時間ごと）で取得
 - 未知の EOA へのガス種銭・トークン送金を検出したら、その子ウォレットを自動で監視に追加（子・孫・曾孫…）
-- 資産を **リスク資産（アルト）/ 準現金（ETH・BNB）/ 現金（ステーブル）** に分け、クラスター合算の推移を毎日 9:00 JST 時点で記録
+- 資産を **リスク資産（アルト）/ 準現金（ETH・BNB）/ 現金（ステーブル）** に分け、クラスター合算の推移を毎日の締め（24:00 JST）時点で記録
 - 時点間の増減を **値動き / 利確（売り＋外部流出）/ 買い / 誤差** に分解して表示（`portfolio.py`）
 - 表示は「本体 / 子1 / 子2 / 孫1」のみ。アドレスは出さない
 
@@ -64,7 +64,7 @@ NODEREAL_KEY=xxxx BLOCKSCOUT_KEY=proapi_xxxx DRY_RUN=1 python tracker.py
 
 - 立ち上げ: `python whale_repo/setup_whale.py --name unipcs --wallet 0x… --wallet <Solanaアドレス> --blockscout proapi_… --helius … --nodereal … --tg-token … --tg-chat … --gh-token ghp_…`（リポ作成 → push → Secrets → Pages → 初回実行まで自動）
 - API キーはクジラごとに別アカウントで取得すると無料枠が人数分になる（Blockscout PRO 10万credits/日、NodeReal 1,000万CU/月、Helius 100万credits/月）
-- Telegram は同じボット・同じチャットに `[name]` を頭に付けて送る（`config.json` の `name`）
+- Telegram は同じボット・同じチャットに `【name】` を頭に付けて送る（`config.json` の `name`）
 - ローカル確認: `WHALE_ROOT=/path/to/whale-unipcs DRY_RUN=1 python tracker.py`
 
 ## Solana
@@ -92,9 +92,8 @@ NODEREAL_KEY=xxxx BLOCKSCOUT_KEY=proapi_xxxx DRY_RUN=1 python tracker.py
 - `buy_alert_usd`: 買いの即時通知の最小額（既定 5,000。実行をまたぐ分割買いの累計でも可）
 - `buy_list_min_usd`: 台帳の買い一覧・新規銘柄の成績に載せる最小額（既定 5,000。$1,000 は低すぎるため 2026-09-08 に引き上げ）
 - `sell_alert_usd` / `daily_big_move_usd`: 売り・外部流出の即時通知、日次レポートの「大きな動き」の最小額（既定 100,000）
-- `move_min_usd`: レポート一覧・まとめに載せる最小額（既定 5,000）
-- `price_move_alert_pct`: 1時間でリスク資産がこの%以上動いたら「まとめ」を送る（既定 5）
-- `daily_report_hour_utc`: 日次レポートの時刻（既定 0 = 9:00 JST）
+- `move_min_usd`: 台帳の売り・流出一覧に載せる最小額（既定 5,000）
+- `daily_report_hour_utc`: 1日の締め＝日次レポートの時刻（既定 15 UTC = 24:00 JST。チャートの時点もこれに揃う）
 - `labels`: 相手先アドレスに名前を付ける。ここに載せたアドレスは「サービス」扱いになり、子ウォレットとして誤登録されない
 - `manual_prices`: DexScreener に無い銘柄の価格を手で指定 `{"STRATTON": 0.002}`
 - `chains`: 空にすると初回実行で自動探索。手で `["robinhood","bsc"]` と書いてもよい
