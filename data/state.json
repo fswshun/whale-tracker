@@ -1,5 +1,5 @@
 {
-  "run_count": 341,
+  "run_count": 342,
   "last_daily": "2026-09-09",
   "cross_alerted": [],
   "buy_accum": {
@@ -42,46 +42,6 @@
       "note": "",
       "value": 1491.6317999999999,
       "unit": 0.0001501019522621912
-    },
-    "robinhood:0x8fc6ba54f197de04ab6f2cf070ff5e96f334f8a1:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
-      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
-      "chain": "robinhood",
-      "contract": "0x8fc6ba54f197de04ab6f2cf070ff5e96f334f8a1",
-      "sym": "CHIPS",
-      "amount": 9691690.228687203,
-      "usd": 187.824956631958,
-      "counter_usd": 397.76848,
-      "n": 2,
-      "other": {
-        "ETH": 0.16
-      },
-      "first": 1788905303,
-      "last": 1788905316,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 397.76848,
-      "unit": 4.10422197381643e-05
-    },
-    "robinhood:0x8fc6ba54f197de04ab6f2cf070ff5e96f334f8a1:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
-      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
-      "chain": "robinhood",
-      "contract": "0x8fc6ba54f197de04ab6f2cf070ff5e96f334f8a1",
-      "sym": "CHIPS",
-      "amount": 10661944.89131539,
-      "usd": 206.62849199369225,
-      "counter_usd": 397.76848,
-      "n": 2,
-      "other": {
-        "ETH": 0.16
-      },
-      "first": 1788905303,
-      "last": 1788905316,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 397.76848,
-      "unit": 3.7307309693937684e-05
     },
     "robinhood:0xe3aad3864bc63213a965e836e0c0307a3b7c1e18:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
       "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
