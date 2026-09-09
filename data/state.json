@@ -1,5 +1,5 @@
 {
-  "run_count": 295,
+  "run_count": 296,
   "last_daily": "2026-09-08",
   "cross_alerted": [
     [
@@ -1915,6 +1915,86 @@
       "note": "",
       "value": 199.86720000000003,
       "unit": 2.3521702547958506e-05
+    },
+    "robinhood:0x184ea37e69bd1b373339da41f711301123df2c0e:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
+      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
+      "chain": "robinhood",
+      "contract": "0x184ea37e69bd1b373339da41f711301123df2c0e",
+      "sym": "ELONCOIN",
+      "amount": 21935027.936103314,
+      "usd": 0.0,
+      "counter_usd": 124.79100000000001,
+      "n": 1,
+      "other": {
+        "ETH": 0.05
+      },
+      "first": 1788963308,
+      "last": 1788963308,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 124.79100000000001,
+      "unit": 5.689119720454239e-06
+    },
+    "robinhood:0xf4a99c5c7a7db53d67c6283517d99c6e5ed64d31:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
+      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
+      "chain": "robinhood",
+      "contract": "0xf4a99c5c7a7db53d67c6283517d99c6e5ed64d31",
+      "sym": "ElonCoin",
+      "amount": 26561881.073764484,
+      "usd": 0.0,
+      "counter_usd": 124.79100000000001,
+      "n": 1,
+      "other": {
+        "ETH": 0.05
+      },
+      "first": 1788963352,
+      "last": 1788963352,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 124.79100000000001,
+      "unit": 4.698123587461496e-06
+    },
+    "robinhood:0x184ea37e69bd1b373339da41f711301123df2c0e:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
+      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
+      "chain": "robinhood",
+      "contract": "0x184ea37e69bd1b373339da41f711301123df2c0e",
+      "sym": "ELONCOIN",
+      "amount": 27002562.319420587,
+      "usd": 0.0,
+      "counter_usd": 124.79100000000001,
+      "n": 1,
+      "other": {
+        "ETH": 0.05
+      },
+      "first": 1788963308,
+      "last": 1788963308,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 124.79100000000001,
+      "unit": 4.621450309930355e-06
+    },
+    "robinhood:0xf4a99c5c7a7db53d67c6283517d99c6e5ed64d31:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
+      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
+      "chain": "robinhood",
+      "contract": "0xf4a99c5c7a7db53d67c6283517d99c6e5ed64d31",
+      "sym": "ElonCoin",
+      "amount": 31999651.83563188,
+      "usd": 0.0,
+      "counter_usd": 124.79100000000001,
+      "n": 1,
+      "other": {
+        "ETH": 0.05
+      },
+      "first": 1788963352,
+      "last": 1788963352,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 124.79100000000001,
+      "unit": 3.89976117993397e-06
     }
   },
   "last_daily_cut": 1788879600
