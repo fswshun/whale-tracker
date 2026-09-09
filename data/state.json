@@ -1,88 +1,8 @@
 {
-  "run_count": 310,
+  "run_count": 311,
   "last_daily": "2026-09-09",
   "cross_alerted": [],
   "buy_accum": {
-    "robinhood:0xde1a4b8927769f8b6ed07e5d5f49e7f649ebcbbd:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
-      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
-      "chain": "robinhood",
-      "contract": "0xde1a4b8927769f8b6ed07e5d5f49e7f649ebcbbd",
-      "sym": "astro",
-      "amount": 1679362.295178353,
-      "usd": 1309.5667177800797,
-      "counter_usd": 997.6044,
-      "n": 4,
-      "other": {
-        "ETH": 0.4
-      },
-      "first": 1788887039,
-      "last": 1788887045,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 997.6044,
-      "unit": 0.0005940376313462794
-    },
-    "robinhood:0xb115bc775ccc385844fb18af6214034c668217ef:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
-      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
-      "chain": "robinhood",
-      "contract": "0xb115bc775ccc385844fb18af6214034c668217ef",
-      "sym": "TRILLIONS",
-      "amount": 4479540.02069534,
-      "usd": 451.98558808815983,
-      "counter_usd": 997.6044,
-      "n": 2,
-      "other": {
-        "ETH": 0.4
-      },
-      "first": 1788887107,
-      "last": 1788887109,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 997.6044,
-      "unit": 0.00022270241930892409
-    },
-    "robinhood:0xde1a4b8927769f8b6ed07e5d5f49e7f649ebcbbd:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
-      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
-      "chain": "robinhood",
-      "contract": "0xde1a4b8927769f8b6ed07e5d5f49e7f649ebcbbd",
-      "sym": "astro",
-      "amount": 1680755.941715682,
-      "usd": 1310.6534833498888,
-      "counter_usd": 997.6044,
-      "n": 4,
-      "other": {
-        "ETH": 0.4
-      },
-      "first": 1788887039,
-      "last": 1788887045,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 997.6044,
-      "unit": 0.0005935450681683538
-    },
-    "robinhood:0xb115bc775ccc385844fb18af6214034c668217ef:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
-      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
-      "chain": "robinhood",
-      "contract": "0xb115bc775ccc385844fb18af6214034c668217ef",
-      "sym": "TRILLIONS",
-      "amount": 4559135.359081478,
-      "usd": 460.01675773132115,
-      "counter_usd": 997.6044,
-      "n": 2,
-      "other": {
-        "ETH": 0.4
-      },
-      "first": 1788887107,
-      "last": 1788887109,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 997.6044,
-      "unit": 0.00021881438505940432
-    },
     "robinhood:0xe7032b4efe22bdc9a2723f156ca190caf74b90f7:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
       "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
       "chain": "robinhood",
