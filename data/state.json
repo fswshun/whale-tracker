@@ -1,48 +1,8 @@
 {
-  "run_count": 319,
+  "run_count": 320,
   "last_daily": "2026-09-09",
   "cross_alerted": [],
   "buy_accum": {
-    "robinhood:0xd9d3236f79d9d6bc892a462eace16570a15fe0c7:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
-      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
-      "chain": "robinhood",
-      "contract": "0xd9d3236f79d9d6bc892a462eace16570a15fe0c7",
-      "sym": "DATACENTER",
-      "amount": 9527674.05108513,
-      "usd": 555.5586739187739,
-      "counter_usd": 748.3409999999999,
-      "n": 1,
-      "other": {
-        "ETH": 0.3
-      },
-      "first": 1788892878,
-      "last": 1788892878,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 748.3409999999999,
-      "unit": 7.854393380667441e-05
-    },
-    "robinhood:0xd9d3236f79d9d6bc892a462eace16570a15fe0c7:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
-      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
-      "chain": "robinhood",
-      "contract": "0xd9d3236f79d9d6bc892a462eace16570a15fe0c7",
-      "sym": "DATACENTER",
-      "amount": 8198324.394770807,
-      "usd": 478.04429545908573,
-      "counter_usd": 748.3409999999999,
-      "n": 1,
-      "other": {
-        "ETH": 0.3
-      },
-      "first": 1788892878,
-      "last": 1788892878,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 748.3409999999999,
-      "unit": 9.127974985685116e-05
-    },
     "robinhood:0x4631413c4026169194768c8e2a1e5a1d8d7398e5:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
       "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
       "chain": "robinhood",
@@ -1882,6 +1842,46 @@
       "note": "",
       "value": 248.842,
       "unit": 5.149815987801896e-06
+    },
+    "robinhood:0x55869aa98279eb63e557c7b6fc6125e41c414429:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
+      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
+      "chain": "robinhood",
+      "contract": "0x55869aa98279eb63e557c7b6fc6125e41c414429",
+      "sym": "BCTC",
+      "amount": 2329970.588034802,
+      "usd": 791.258011696619,
+      "counter_usd": 497.81899999999996,
+      "n": 2,
+      "other": {
+        "ETH": 0.2
+      },
+      "first": 1788978836,
+      "last": 1788978838,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 497.81899999999996,
+      "unit": 0.00021365892022692098
+    },
+    "robinhood:0x55869aa98279eb63e557c7b6fc6125e41c414429:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
+      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
+      "chain": "robinhood",
+      "contract": "0x55869aa98279eb63e557c7b6fc6125e41c414429",
+      "sym": "BCTC",
+      "amount": 2535094.0314435195,
+      "usd": 860.9179330782192,
+      "counter_usd": 497.81899999999996,
+      "n": 2,
+      "other": {
+        "ETH": 0.2
+      },
+      "first": 1788978836,
+      "last": 1788978838,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 497.81899999999996,
+      "unit": 0.0001963710197039652
     }
   },
   "last_daily_cut": 1788966000
