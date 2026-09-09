@@ -1,28 +1,8 @@
 {
-  "run_count": 306,
+  "run_count": 307,
   "last_daily": "2026-09-09",
   "cross_alerted": [],
   "buy_accum": {
-    "robinhood:0x6d11782ef6cbe773da2defef612f9a57c54012bf:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
-      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
-      "chain": "robinhood",
-      "contract": "0x6d11782ef6cbe773da2defef612f9a57c54012bf",
-      "sym": "MACINTOSH",
-      "amount": 4287624.482583418,
-      "usd": 5097.985509791684,
-      "counter_usd": 4979.74,
-      "n": 4,
-      "other": {
-        "ETH": 2.0
-      },
-      "first": 1788884589,
-      "last": 1788884594,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 4979.74,
-      "unit": 0.00116142167305649
-    },
     "robinhood:0xaa22bd7f1ac3bb0cb8e599b30eb7fe663f6d1ad7:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
       "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
       "chain": "robinhood",
