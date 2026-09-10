@@ -1,48 +1,8 @@
 {
-  "run_count": 451,
+  "run_count": 452,
   "last_daily": "2026-09-10",
   "cross_alerted": [],
   "buy_accum": {
-    "robinhood:0x2ec9f218165e087eea32ac4104250bd4a40d1e18:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
-      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
-      "chain": "robinhood",
-      "contract": "0x2ec9f218165e087eea32ac4104250bd4a40d1e18",
-      "sym": "DOOMCOIN",
-      "amount": 11823313.795909666,
-      "usd": 240.0132700569662,
-      "counter_usd": 299.4348,
-      "n": 2,
-      "other": {
-        "ETH": 0.12000000000000001
-      },
-      "first": 1788972842,
-      "last": 1788972949,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 299.4348,
-      "unit": 2.5325793188673633e-05
-    },
-    "robinhood:0x2ec9f218165e087eea32ac4104250bd4a40d1e18:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
-      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
-      "chain": "robinhood",
-      "contract": "0x2ec9f218165e087eea32ac4104250bd4a40d1e18",
-      "sym": "DOOMCOIN",
-      "amount": 11754802.129280306,
-      "usd": 238.6224832243902,
-      "counter_usd": 299.4348,
-      "n": 2,
-      "other": {
-        "ETH": 0.12000000000000001
-      },
-      "first": 1788972842,
-      "last": 1788972949,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 299.4348,
-      "unit": 2.5473401994077892e-05
-    },
     "robinhood:0xb33eb16782776b4d738c0fd643577cb0284db610:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
       "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
       "chain": "robinhood",
