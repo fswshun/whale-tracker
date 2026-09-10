@@ -1,28 +1,8 @@
 {
-  "run_count": 351,
+  "run_count": 352,
   "last_daily": "2026-09-09",
   "cross_alerted": [],
   "buy_accum": {
-    "robinhood:0x80baa4b3bfac6f4978700df824b1b3d98e889136:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
-      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
-      "chain": "robinhood",
-      "contract": "0x80baa4b3bfac6f4978700df824b1b3d98e889136",
-      "sym": "CRUMBS",
-      "amount": 584592.1092306023,
-      "usd": 1677.194761382598,
-      "counter_usd": 2491.39,
-      "n": 2,
-      "other": {
-        "ETH": 1.0
-      },
-      "first": 1788912105,
-      "last": 1788912106,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 2491.39,
-      "unit": 0.0042617578319334255
-    },
     "robinhood:0x3c35868f5b3ace1c8ad87a0b05a6e2d7167105a0:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
       "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
       "chain": "robinhood",
@@ -842,6 +822,46 @@
       "note": "",
       "value": 490.4136000000001,
       "unit": 0.0005536576063868881
+    },
+    "robinhood:0x62060c24e3b2396a28b1db1e2191e4d215eafd43:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
+      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
+      "chain": "robinhood",
+      "contract": "0x62060c24e3b2396a28b1db1e2191e4d215eafd43",
+      "sym": "?",
+      "amount": 3509886.201229904,
+      "usd": 146.7483420734223,
+      "counter_usd": 123.411,
+      "n": 1,
+      "other": {
+        "ETH": 0.05
+      },
+      "first": 1788999039,
+      "last": 1788999039,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 123.411,
+      "unit": 3.516096902422517e-05
+    },
+    "robinhood:0x62060c24e3b2396a28b1db1e2191e4d215eafd43:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
+      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
+      "chain": "robinhood",
+      "contract": "0x62060c24e3b2396a28b1db1e2191e4d215eafd43",
+      "sym": "?",
+      "amount": 3780412.5639859075,
+      "usd": 158.0590493002508,
+      "counter_usd": 123.411,
+      "n": 1,
+      "other": {
+        "ETH": 0.05
+      },
+      "first": 1788999039,
+      "last": 1788999039,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 123.411,
+      "unit": 3.264484971182104e-05
     }
   },
   "last_daily_cut": 1788966000
