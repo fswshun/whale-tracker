@@ -1,6 +1,6 @@
 {
-  "run_count": 439,
-  "last_daily": "2026-09-09",
+  "run_count": 440,
+  "last_daily": "2026-09-10",
   "cross_alerted": [],
   "buy_accum": {
     "robinhood:0xa4c4aadaf5ae1e42149b617e59951547da1bec62:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
@@ -42,46 +42,6 @@
       "note": "",
       "value": 398.1472,
       "unit": 3.053205831630934e-05
-    },
-    "robinhood:0x608f6957ee3a025676ffadf966a303686302d394:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
-      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
-      "chain": "robinhood",
-      "contract": "0x608f6957ee3a025676ffadf966a303686302d394",
-      "sym": "TUTANKHAMOOLAH",
-      "amount": 2015505.7105262897,
-      "usd": 101.7427282673671,
-      "counter_usd": 124.421,
-      "n": 1,
-      "other": {
-        "ETH": 0.05
-      },
-      "first": 1788965838,
-      "last": 1788965838,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 124.421,
-      "unit": 6.173190150253215e-05
-    },
-    "robinhood:0x608f6957ee3a025676ffadf966a303686302d394:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
-      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
-      "chain": "robinhood",
-      "contract": "0x608f6957ee3a025676ffadf966a303686302d394",
-      "sym": "TUTANKHAMOOLAH",
-      "amount": 2232628.011043854,
-      "usd": 112.70306199749375,
-      "counter_usd": 124.421,
-      "n": 1,
-      "other": {
-        "ETH": 0.05
-      },
-      "first": 1788965838,
-      "last": 1788965838,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 124.421,
-      "unit": 5.572849547015563e-05
     },
     "robinhood:0x9c31ab5c15371ed9bc15ce8f78e3f09d7ba79849:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
       "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
@@ -704,5 +664,5 @@
       "unit": 1.1298425615439372e-05
     }
   },
-  "last_daily_cut": 1788966000
+  "last_daily_cut": 1789052400
 }
