@@ -1,5 +1,5 @@
 {
-  "run_count": 591,
+  "run_count": 592,
   "last_daily": "2026-09-11",
   "cross_alerted": [
     [
@@ -10,26 +10,6 @@
     ]
   ],
   "buy_accum": {
-    "robinhood:0x7a492b0a2d630b94791af846c1842db9e623420c:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
-      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
-      "chain": "robinhood",
-      "contract": "0x7a492b0a2d630b94791af846c1842db9e623420c",
-      "sym": "MARIO",
-      "amount": 442576.75696575094,
-      "usd": 2396.6644819267794,
-      "counter_usd": 2196.9860000000003,
-      "n": 9,
-      "other": {
-        "ETH": 0.8999999999999999
-      },
-      "first": 1789053097,
-      "last": 1789054737,
-      "runs": 2,
-      "funding": 0.0,
-      "note": "",
-      "value": 2196.9860000000003,
-      "unit": 0.004964079033572057
-    },
     "robinhood:0x6d25e86b3695c99280a2a6af90fcfd59cc2813fc:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
       "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
       "chain": "robinhood",
