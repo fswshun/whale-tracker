@@ -38,7 +38,7 @@ else:
 d = Path(tempfile.mkdtemp(prefix=f"whale-{a.name}-"))
 (d / "data").mkdir(); (d / "docs").mkdir(); (d / ".github" / "workflows").mkdir(parents=True)
 (d / ".github" / "workflows" / "track.yml").write_text((tmpl / "track.yml").read_text().replace("fswshun/whale-tracker", a.code_repo))
-cfg = {"name": a.name, "main_wallets": a.wallet, "chains": [], "threshold_usd": 10000, "buy_alert_usd": 5000, "move_min_usd": 5000, "buy_list_min_usd": 5000,
+cfg = {"name": a.name, "main_wallets": a.wallet, "chains": [], "threshold_usd": 10000, "buy_alert_usd": 50000, "move_min_usd": 5000, "buy_list_min_usd": 5000,
        "price_move_alert_pct": 5, "daily_report_hour_utc": 15, "pages_url": f"https://{a.owner}.github.io/{repo}/", "initial_lookback_hours": 120,
        "holdings_every_n_runs": 6, "secondary_chains_every_n_runs": 6, "primary_chains": ["robinhood", "bsc", "solana"], "notify_max_age_hours": 48,
        "child_detect_max_age_days": 30, "labels": {}, "manual_prices": {}}

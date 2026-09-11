@@ -204,22 +204,44 @@ def cutoff_points(snaps, n=30):
 
 # ------------------------------------------------------------ 増減の分解
 def group_trades(evs, flow_sel, ctx, min_usd=0.0):
-    """同一ウォレット・同一銘柄の売買を束ねる。相手足（何で払ったか / 何を受け取ったか）も付ける"""
+    """同一ウォレット・同一銘柄の売買を束ねる。相手足（何で払ったか / 何を受け取ったか）も付ける。
+       1つの tx の中は銘柄ごとに IN−OUT を差し引き（ネット）してから扱う:
+         - 経路上の中間トークン（同じ tx で受け取って同量を払い出す。アグリゲータの USDC→SOL→EMBER 等）はネット 0 なので無視
+         - 相手足の金額は「実際に減った銘柄のネット分」だけ。買った銘柄が複数あれば銘柄側の時価で比例配分
+       （以前は tx 内の全 OUT 足を IN 足それぞれに丸ごと付けていたため、中間トークンの MET が $33K の買いとして誤通知され、買い合計も二重計上された）"""
     by_tx = defaultdict(list)
     for e in evs: by_tx[(e["wallet"], e["tx"])].append(e)
     agg = {}
+    want_in = flow_sel in ("buy", "in")            # buy/in は受け取った側、sell/out は払った側を集計する
     for (w, tx), legs in by_tx.items():
-        for e in legs:
-            if flow_of(e, ctx) != flow_sel: continue
-            key = (w, e["chain"], L(e["contract"] or ""))
-            a = agg.setdefault(key, {"wallet": w, "chain": e["chain"], "contract": L(e["contract"] or ""), "sym": e["token"], "amount": 0.0, "usd": 0.0,
-                                     "counter_usd": 0.0, "n": 0, "other": defaultdict(float), "first": e["ts"], "last": e["ts"], "funding": 0.0, "note": ""})
-            a["amount"] += e["amount"]; a["usd"] += e.get("usd") or 0.0; a["n"] += 1
-            a["first"] = min(a["first"], e["ts"]); a["last"] = max(a["last"], e["ts"])
-            if e.get("funding_usd"): a["funding"] += e["funding_usd"]; a["note"] = e.get("funding_note", "")
-            for l in legs:
-                if l["dir"] != e["dir"] and l["amount"] > 0:
-                    a["other"][l["token"]] += l["amount"]; a["counter_usd"] += l.get("usd") or 0.0   # 相手足の時価＝支払額/受取額
+        bytok = defaultdict(list)
+        for l in legs: bytok[(l["chain"], L(l["contract"] or ""))].append(l)
+        net, px = {}, {}
+        for k, ls in bytok.items():
+            net[k] = sum(l["amount"] if l["dir"] == "IN" else -l["amount"] for l in ls)
+            priced = [l for l in ls if l.get("usd") and l["amount"]]
+            px[k] = (sum(l["usd"] for l in priced) / sum(l["amount"] for l in priced)) if priced else None
+        side = {k: v for k, v in net.items() if (v > 1e-9 if want_in else v < -1e-9)}          # 集計対象（ネットで増えた/減った銘柄）
+        counter = {k: abs(v) for k, v in net.items() if (v < -1e-9 if want_in else v > 1e-9)
+                   and not (px.get(k) and abs(v) * px[k] < 1.0)}                                  # 相手足（ネットで減った/増えた銘柄。$1 未満の端数＝手数料・ラップの残りは無視）
+        counter_usd_tx = sum(q * px[k] for k, q in counter.items() if px.get(k))
+        targets = []
+        for k, q in side.items():
+            rep = next((l for l in bytok[k] if (l["dir"] == "IN") == want_in), bytok[k][0])
+            if flow_of(rep, ctx) != flow_sel: continue
+            targets.append((k, abs(q), rep, abs(q) * px[k] if px.get(k) else 0.0))
+        if not targets: continue
+        tot_usd = sum(t[3] for t in targets)
+        for k, q, rep, usd_tok in targets:
+            share = (usd_tok / tot_usd) if tot_usd > 0 else 1.0 / len(targets)
+            key = (w, rep["chain"], k[1])
+            a = agg.setdefault(key, {"wallet": w, "chain": rep["chain"], "contract": k[1], "sym": rep["token"], "amount": 0.0, "usd": 0.0,
+                                     "counter_usd": 0.0, "n": 0, "other": defaultdict(float), "first": rep["ts"], "last": rep["ts"], "funding": 0.0, "note": ""})
+            a["amount"] += q; a["usd"] += usd_tok; a["n"] += 1
+            a["first"] = min(a["first"], rep["ts"]); a["last"] = max(a["last"], rep["ts"])
+            if rep.get("funding_usd"): a["funding"] += rep["funding_usd"]; a["note"] = rep.get("funding_note", "")
+            a["counter_usd"] += counter_usd_tx * share
+            for ck, cq in counter.items(): a["other"][bytok[ck][0]["token"]] += cq * share
     out = []
     for a in agg.values():
         a["other"] = dict(a["other"])
@@ -312,17 +334,31 @@ def share_text(value, ctx, big_pct=10.0):
     return f"（総資産の {pct:.1f}%{'・大口' if pct >= big_pct else ''}）"
 
 def buy_alert_lines(buys, names, ctx):
+    """買いの即時通知。2026-09-11 藤沼さん要望で簡素化: 銘柄・枚数・合計額・総資産比・JST 時刻・回数・平均取得と現在価格の比・流動性・DexScreener。
+       支払いの内訳（何で払ったか / 原資）は出さない（「原資 $1.57M（SPCXB）」が7日分の送金合計で紛らわしかった）"""
     lines = []
     for a in buys:
         who = names.get(a["wallet"], a["wallet"][:6]); t = jst(a["last"]).strftime("%m-%d %H:%M")
         times = (f"、{a['n']}回" if a["n"] > 1 else "") + ("（分割買いの累計）" if a.get("accum") else "")
-        unit = f"、平均 ${a['unit']:.4g}/枚" if a.get("unit") else ""
-        lines.append(f"🟢 買い  {who}  {symc(a['sym'], a['chain'])} {fmt_qty(a['amount'])} ≈ {fmt_usd(a['value'])}{share_text(a['value'], ctx)}\n"
-                     f"   支払 {other_leg_text(a)}{times}{unit}  {t} JST")
-        q = ctx.get("quote")
-        if q:
-            px, liq = q(a["chain"], a["contract"])
-            if px: lines.append(f"   いま ${px:.4g}/枚" + (f"（取得比 {(px / a['unit'] - 1) * 100:+.0f}%）" if a.get("unit") else "") + (f"　流動性 {fmt_usd(liq)}" if liq else ""))
+        detail = f"   {t} JST{times}"
+        q = ctx.get("quote"); px, liq = (q(a["chain"], a["contract"]) if q else (None, None))
+        if a.get("unit"):
+            detail += f"、平均 ${a['unit']:.4g}/枚" + (f" → いま ${px:.4g}（取得比 {(px / a['unit'] - 1) * 100:+.0f}%）" if px else "")
+        elif px: detail += f"、いま ${px:.4g}/枚"
+        if liq: detail += f"　流動性 {fmt_usd(liq)}"
+        lines.append(f"🟢 買い  {who}  {symc(a['sym'], a['chain'])} {fmt_qty(a['amount'])} ≈ {fmt_usd(a['value'])}{share_text(a['value'], ctx)}\n{detail}")
+        link = dex_link(a["chain"], a["contract"], ctx)
+        if link: lines.append(f"   {link}")
+    return lines
+
+def receipt_alert_lines(recs, names, ctx):
+    """大口の受取（買いではなくクラスター外から届いたもの: 取引所からの引き出し・他のウォレットからの移動・購入の着弾など）。
+       買いには数えないが、金額が大きければ「何かが動いた」印として知らせる（EMBER $621K が素の受取で来て買い通知が無かった件）"""
+    lines = []
+    for a in recs:
+        who = names.get(a["wallet"], a["wallet"][:6]); t = jst(a["last"]).strftime("%m-%d %H:%M")
+        lines.append(f"📥 大口受取  {who}  {symc(a['sym'], a['chain'])} {fmt_qty(a['amount'])} ≈ {fmt_usd(a['value'])}{share_text(a['value'], ctx)}\n"
+                     f"   {t} JST　クラスター外から着弾（購入の着弾か他所からの移動かは不明、買いには数えない）")
         link = dex_link(a["chain"], a["contract"], ctx)
         if link: lines.append(f"   {link}")
     return lines
@@ -334,8 +370,9 @@ def sell_alert_lines(sells, outs, names, ctx):
     for a in sells:
         who = names.get(a["wallet"], a["wallet"][:6]); t = jst(a["last"]).strftime("%m-%d %H:%M")
         times = f"、{a['n']}回" if a["n"] > 1 else ""
+        unit = f"、平均 ${a['unit']:.4g}/枚" if a.get("unit") else ""
         lines.append(f"🔻 売り  {who}  {symc(a['sym'], a['chain'])} {fmt_qty(a['amount'])} ≈ {fmt_usd(a['value'])}{share_text(a['value'], ctx)}\n"
-                     f"   受取 {other_leg_text(a)}{times}  {t} JST")
+                     f"   {t} JST{times}{unit}")
         link = dex_link(a["chain"], a["contract"], ctx)
         if link: lines.append(f"   {link}")
     for a in outs:

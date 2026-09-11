@@ -1295,6 +1295,10 @@ def notify(new_events, holdings):
     sells = P.group_trades(recent, "sell", CTX, SELL_ALERT_USD)
     outs = P.group_trades([e for e in recent if P.bucket_of(e["chain"], e["contract"], CTX) == "risk"], "out", CTX, SELL_ALERT_USD)
     if sells or outs: lines += P.sell_alert_lines(sells, outs, names, CTX)
+    # 大口の受取（≥ SELL_ALERT_USD）: 買いではないが「何かが着弾した」印。異常トークン（SPYB/Monkey 等）は評価チェックで除く
+    recs = P.group_trades([e for e in recent if e["kind"] == "受取" and P.bucket_of(e["chain"], e["contract"], CTX) == "risk"], "in", CTX, SELL_ALERT_USD)
+    recs = [a for a in recs if valuation_check(a["chain"], a["contract"], a["sym"], a["amount"], _px.get((a["chain"], a["contract"])), a["value"])[0]]
+    if recs: lines += P.receipt_alert_lines(recs, names, CTX)
     for e in recent:
         if e["kind"] == "新ウォレット開設(ガス種銭)":
             lines.append(f"🆕 新ウォレット {names.get(e['cp'], '?')} を検出（{names.get(e['wallet'], '?')} から種銭 {e['amount']:.4f} {e['token']}）→ 監視に追加")
