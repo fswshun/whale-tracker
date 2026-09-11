@@ -244,6 +244,14 @@ def bridge(p0, p1, events, ctx, min_usd=5000.0):
             d = p["amt"] * (q["px"] - p["px"]); price += d
             movers.append({"sym": p["sym"], "chain": k.split(":")[0], "usd": d, "pct": (q["px"] / p["px"] - 1) * 100, "hold": q["usd"]})
     evs = [e for e in events if t0 < e["ts"] <= t1]
+    # 期首にあった銘柄が、売り・送金の記録なしに期末の時点から消えた＝価格が取れなくなった（DEX ペア消滅・流動性枯渇）。
+    # 「全売却」や「誤差」ではなく −100% の値動きとして扱う（ETHG $586K がペア消滅で 0 になった例。誤差に埋めると何が起きたか分からない）
+    outs_by_key = {f"{e['chain']}:{L(e['contract'] or '')}" for e in evs if e["dir"] == "OUT"}
+    vanished = set()
+    for k, p in s0["pos"].items():
+        if p["b"] != "risk" or not p.get("px") or k in s1["pos"] or k in outs_by_key or p["usd"] < min_usd: continue
+        vanished.add(k); price -= p["usd"]
+        movers.append({"sym": p["sym"], "chain": k.split(":")[0], "usd": -p["usd"], "pct": -100.0, "hold": 0.0, "note": "価格消失"})
     buys = group_trades(evs, "buy", ctx); sells = group_trades(evs, "sell", ctx)
     outs = group_trades([e for e in evs if bucket_of(e["chain"], e["contract"], ctx) == "risk"], "out", ctx)
     ins = group_trades([e for e in evs if bucket_of(e["chain"], e["contract"], ctx) == "risk" and (e.get("usd") or 0) >= min_usd
@@ -267,7 +275,8 @@ def bridge(p0, p1, events, ctx, min_usd=5000.0):
         pe = amt0 * (px1 - px0) if (px0 and px1) else 0.0
         positions.append({"key": k, "sym": (b or a)["sym"], "chain": k.split(":")[0], "contract": k.split(":")[1],
                           "amt0": amt0, "amt1": amt1, "px0": px0, "px1": px1, "usd0": usd0, "usd1": usd1,
-                          "price_effect": pe, "qty_effect": usd1 - usd0 - pe, "status": "新規" if not a else ("全売却" if not b or amt1 <= 0 else "")})
+                          "price_effect": (pe if k not in vanished else -usd0), "qty_effect": (usd1 - usd0 - pe if k not in vanished else 0.0),
+                          "status": "新規" if not a else ("価格消失" if k in vanished else ("全売却" if not b or amt1 <= 0 else ""))})
     positions.sort(key=lambda x: -max(x["usd0"], x["usd1"]))
     return {"t0": t0, "t1": t1, "label0": p0["label"], "label1": p1["label"], "approx": bool(s0.get("approx") or s1.get("approx")),
             "total0": s0["total"], "total1": s1["total"], "risk0": risk0, "risk1": risk1,
@@ -350,7 +359,7 @@ def daily_report_text(br, names, ctx, day_label, big_usd=100000.0, pages=""):
     def item(a, tag=""): return f"{names.get(a['wallet'], '?')} {symc(a['sym'], a['chain'])} {fmt_qty(a['amount'])} ≈ {fmt_usd(a['value'])}{share_text(a['value'], sctx)}{tag}"
     if buys: L.append("🟢 大きな買い: " + "、".join(item(a) for a in buys[:5]))
     if sells or outs: L.append("🔻 大きな売り: " + "、".join([item(a) for a in sells[:5]] + [item(a, "［外部流出→売り扱い］") for a in outs[:5]]))
-    if downs: L.append("📉 大きな値下がり: " + "、".join(f"{symc(m['sym'], m.get('chain', ''))} {m['pct']:+.1f}%（{fmt_usd(m['usd'], True)}）" for m in downs[:5]))
+    if downs: L.append("📉 大きな値下がり: " + "、".join(f"{symc(m['sym'], m.get('chain', ''))} {m['pct']:+.1f}%（{fmt_usd(m['usd'], True)}{'・' + m['note'] if m.get('note') else ''}）" for m in downs[:5]))
     if ups: L.append("📈 大きな値上がり: " + "、".join(f"{symc(m['sym'], m.get('chain', ''))} {m['pct']:+.1f}%（{fmt_usd(m['usd'], True)}）" for m in ups[:5]))
     if not (buys or sells or outs or ups or downs): L.append(f"{fmt_usd(big_usd)} 以上の大きな動きはなし")
     if pages and "<" not in pages: L.append(f"詳細: {pages}")

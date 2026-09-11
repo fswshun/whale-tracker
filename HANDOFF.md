@@ -12,7 +12,7 @@
 - **データ源（全部無料枠）**: Blockscout PRO（Robinhood 4663 / ETH / Base / Arb）、NodeReal（本体・unipcs の BSC）、Alchemy（avast・kyle の BSC、internal tx 非対応）、Helius（Solana）、DexScreener（価格）
 - **キー**: 各リポの GitHub Secrets。ローカル検証用の値は `keys.local.json`（gitignore 済み）
 
-## 通知（Telegram @fswshun_whale_bot、chat 479438233、先頭に `【名前】`。第1クジラは「メインクジラ」）
+## 通知（Telegram @fswshun_whale_bot、chat 479438233、先頭に `【名前】`。第1クジラは「Nachi」）
 - **他の人にも同じ通知を送る**（2026-09-11 運用開始、1名）: 相手に `https://t.me/fswshun_whale_bot` を開いて /start と1通送ってもらう → `getUpdates` で相手の chat_id を取る → 4リポの Secret `TG_EXTRA` に `[{"token":"<こちらの Bot トークン>","chat":"<相手の chat_id>"}]` を登録（`.venv/bin/python whale_repo/set_secret.py --name TG_EXTRA --value-file …`）。`tg()` は主宛先＋TG_EXTRA の全宛先に独立して送る。相手の Bot トークンは受け取らない（相手が自分の Bot を使いたい場合だけ token を相手のものにする）。人を外す＝TG_EXTRA から削って再登録。複数人なら Bot を管理者にしたチャンネルに招待する方式も可。宛先の名前・chat_id は公開リポに書かない
 - 🟢 買い ≥$5,000 即時（支払額ベース・平均取得・いまの価格・流動性・DexScreener）。実行をまたぐ分割買いは `accumulate_buys` が `state.buy_accum` に 24h 累計し、$5,000 に達した回で「（分割買いの累計）」付きで通知。台帳の買い一覧・新規銘柄も $5,000 以上のみ（`buy_list_min_usd`、$1,000 は藤沼さんが「低すぎる」）
 - 🔻 売り ≥$100,000 即時（`sell_alert_usd`）。外部流出は売り扱い（藤沼さん判断: 追跡不能＝売却リスク高、安全側に倒す）。買い・売り・日次の大きな動きに「総資産の X%」を併記、10% 以上は「大口」（`share_text`、分母は直近スナップショットの総資産）
