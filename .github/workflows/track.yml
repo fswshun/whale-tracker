@@ -24,6 +24,7 @@ jobs:
           BLOCKSCOUT_KEY: ${{ secrets.BLOCKSCOUT_KEY }}
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_CHAT: ${{ secrets.TG_CHAT }}
+          TG_EXTRA: ${{ secrets.TG_EXTRA }}
         run: python tracker.py
       - name: 結果をコミット
         if: always()
