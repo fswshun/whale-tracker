@@ -45,6 +45,7 @@
    | `BLOCKSCOUT_KEY` | https://dev.blockscout.com で無料登録 → Create API Key → `proapi_…` で始まるキー（表示は1回だけ） |
    | `TG_TOKEN` | Telegram の @BotFather で `/newbot` して得るトークン |
    | `TG_CHAT` | 通知先チャット ID。ボットに何か1通送ってから `https://api.telegram.org/bot<TG_TOKEN>/getUpdates` をブラウザで開き `"chat":{"id":123456789` の数字 |
+   | `TG_EXTRA`（任意） | 他の人にも同じ通知を送る場合の追加宛先。`[{"token":"<相手の Bot トークン>","chat":"<相手の chat_id>"}]` の JSON 配列。登録は `whale_repo/set_secret.py`（`.venv` に pynacl が必要） |
 3. **Settings → Pages** で Source を `Deploy from a branch`、Branch を `main` / `/docs` にする
 4. `config.json` の `pages_url` を自分の Pages URL に書き換える
 5. **Actions** タブで `whale-tracker` を開き **Run workflow** を1回押す（以後は 15 分ごとに自動）

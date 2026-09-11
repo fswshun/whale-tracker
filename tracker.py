@@ -1231,13 +1231,29 @@ def main_holding_of(contract, holdings):
     return tot
 
 # ------------------------------------------------------------ Telegram
+TG_EXTRA = os.getenv("TG_EXTRA", "")   # 追加の通知先（他の人の Bot に同じ通知を送る）: JSON 配列 [{"token": "<BotFather のトークン>", "chat": "<chat_id>"}]
+def tg_targets():
+    """通知先 [(token, chat), ...]。主＝TG_TOKEN/TG_CHAT、追加＝TG_EXTRA（GitHub Secrets、公開リポの config には書かない）"""
+    out = [(TG_TOKEN, TG_CHAT)] if TG_TOKEN and TG_CHAT else []
+    if TG_EXTRA.strip():
+        try:
+            for d in json.loads(TG_EXTRA):
+                if d.get("token") and d.get("chat"): out.append((str(d["token"]), str(d["chat"])))
+        except Exception as e: warn(f"TG_EXTRA の形式が不正（JSON 配列 [{{\"token\":..,\"chat\":..}}] にする）: {e!r}")
+    return out
+
 def tg(text):
     if WHALE_NAME: text = f"【{WHALE_NAME}】" + text     # 誰のクジラの通知かを毎回先頭に（藤沼さん要望: 見た瞬間に分かるように）
     if DRY_RUN: log("[DRY_RUN] Telegram:\n" + text); return
-    if not (TG_TOKEN and TG_CHAT): warn("TG_TOKEN/TG_CHAT 未設定のため通知スキップ"); return
-    for i in range(0, len(text), 3800):
-        r = requests.post(f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage", data={"chat_id": TG_CHAT, "text": text[i:i + 3800], "disable_web_page_preview": True}, timeout=20)
-        if not r.ok: warn("Telegram 送信失敗:", r.status_code, r.text[:200])
+    targets = tg_targets()
+    if not targets: warn("TG_TOKEN/TG_CHAT 未設定のため通知スキップ"); return
+    for token, chat in targets:                      # 宛先ごとに独立して送る（片方が失敗しても他方には届く）
+        for i in range(0, len(text), 3800):
+            try:
+                r = requests.post(f"https://api.telegram.org/bot{token}/sendMessage", data={"chat_id": chat, "text": text[i:i + 3800], "disable_web_page_preview": True}, timeout=20)
+                if not r.ok: warn(f"Telegram 送信失敗 (chat {chat}):", r.status_code, r.text[:200])
+            except Exception as e:
+                warn(f"Telegram 送信エラー (chat {chat}): {e!r}")
 
 def accumulate_buys(groups, now):
     """実行（10分）をまたぐ分割買いを 銘柄×ウォレット ごとに累計し、未通知分の累計が BUY_ALERT_USD に達した時点で通知対象にする。
