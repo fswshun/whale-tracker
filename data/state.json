@@ -1,7 +1,14 @@
 {
-  "run_count": 501,
+  "run_count": 502,
   "last_daily": "2026-09-10",
-  "cross_alerted": [],
+  "cross_alerted": [
+    [
+      "2026-09-11",
+      "robinhood",
+      "0xf014a3782e6979bd965376f6638d90914820ebff",
+      2
+    ]
+  ],
   "buy_accum": {
     "robinhood:0xd82eb5719177e1c3d36fffebcee4d6e578d78e68:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
       "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
@@ -122,6 +129,66 @@
       "note": "",
       "value": 1225.45,
       "unit": 5.081193152570547e-05
+    },
+    "robinhood:0xf014a3782e6979bd965376f6638d90914820ebff:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
+      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
+      "chain": "robinhood",
+      "contract": "0xf014a3782e6979bd965376f6638d90914820ebff",
+      "sym": "+",
+      "amount": 1950257.0447547846,
+      "usd": 1854.8894752662757,
+      "counter_usd": 2456.0029,
+      "n": 2,
+      "other": {
+        "ETH": 1.0
+      },
+      "first": 1789088237,
+      "last": 1789088239,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 2456.0029,
+      "unit": 0.001259322665494489
+    },
+    "robinhood:0x8c1d21dffb93811f465bfcd48b420949665e1e18:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
+      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
+      "chain": "robinhood",
+      "contract": "0x8c1d21dffb93811f465bfcd48b420949665e1e18",
+      "sym": "PLUS",
+      "amount": 3488034.32797418,
+      "usd": 362.7555701093147,
+      "counter_usd": 491.20058,
+      "n": 2,
+      "other": {
+        "ETH": 0.2
+      },
+      "first": 1789088214,
+      "last": 1789088216,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 491.20058,
+      "unit": 0.00014082446840059772
+    },
+    "robinhood:0x8c1d21dffb93811f465bfcd48b420949665e1e18:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
+      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
+      "chain": "robinhood",
+      "contract": "0x8c1d21dffb93811f465bfcd48b420949665e1e18",
+      "sym": "PLUS",
+      "amount": 3520569.585580563,
+      "usd": 366.1392369003786,
+      "counter_usd": 491.20058,
+      "n": 2,
+      "other": {
+        "ETH": 0.2
+      },
+      "first": 1789088214,
+      "last": 1789088216,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 491.20058,
+      "unit": 0.00013952304252466525
     }
   },
   "last_daily_cut": 1789052400
