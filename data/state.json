@@ -1,5 +1,5 @@
 {
-  "run_count": 615,
+  "run_count": 616,
   "last_daily": "2026-09-11",
   "cross_alerted": [
     [
@@ -569,6 +569,46 @@
       "note": "",
       "value": 457.7988,
       "unit": 2.8173321655788867e-05
+    },
+    "robinhood:0xba527c23903eff094a987197ccd643f2da76e4ff:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
+      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
+      "chain": "robinhood",
+      "contract": "0xba527c23903eff094a987197ccd643f2da76e4ff",
+      "sym": "DOGGO",
+      "amount": 1614089.2255357937,
+      "usd": 2179.020454473322,
+      "counter_usd": 509.024,
+      "n": 2,
+      "other": {
+        "ETH": 0.2
+      },
+      "first": 1789155083,
+      "last": 1789155084,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 509.024,
+      "unit": 0.0003153629873410688
+    },
+    "robinhood:0xba527c23903eff094a987197ccd643f2da76e4ff:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
+      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
+      "chain": "robinhood",
+      "contract": "0xba527c23903eff094a987197ccd643f2da76e4ff",
+      "sym": "DOGGO",
+      "amount": 1616717.0016836245,
+      "usd": 2182.5679522728933,
+      "counter_usd": 509.024,
+      "n": 2,
+      "other": {
+        "ETH": 0.2
+      },
+      "first": 1789155083,
+      "last": 1789155084,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 509.024,
+      "unit": 0.0003148504032987283
     }
   },
   "last_daily_cut": 1789138800
