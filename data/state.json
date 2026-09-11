@@ -1,5 +1,5 @@
 {
-  "run_count": 616,
+  "run_count": 617,
   "last_daily": "2026-09-11",
   "cross_alerted": [
     [
@@ -609,6 +609,86 @@
       "note": "",
       "value": 509.024,
       "unit": 0.0003148504032987283
+    },
+    "robinhood:0x5cad14553d7431d014e2cd34b8c9f07b78ed926d:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
+      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
+      "chain": "robinhood",
+      "contract": "0x5cad14553d7431d014e2cd34b8c9f07b78ed926d",
+      "sym": "Doggo",
+      "amount": 2758691.4155566962,
+      "usd": 70.81560863734039,
+      "counter_usd": 254.00189999999998,
+      "n": 1,
+      "other": {
+        "ETH": 0.1
+      },
+      "first": 1789155975,
+      "last": 1789155975,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 254.00189999999998,
+      "unit": 9.207332816118656e-05
+    },
+    "robinhood:0x5cad14553d7431d014e2cd34b8c9f07b78ed926d:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
+      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
+      "chain": "robinhood",
+      "contract": "0x5cad14553d7431d014e2cd34b8c9f07b78ed926d",
+      "sym": "Doggo",
+      "amount": 3278157.7145827585,
+      "usd": 84.15030853333941,
+      "counter_usd": 254.00189999999998,
+      "n": 1,
+      "other": {
+        "ETH": 0.1
+      },
+      "first": 1789155975,
+      "last": 1789155975,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 254.00189999999998,
+      "unit": 7.748312378934128e-05
+    },
+    "robinhood:0x4325b1a3811e9d3b76b446d1277592128f6e95c2:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
+      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
+      "chain": "robinhood",
+      "contract": "0x4325b1a3811e9d3b76b446d1277592128f6e95c2",
+      "sym": "PUPPER",
+      "amount": 2046806.0703015255,
+      "usd": 111.59186695283917,
+      "counter_usd": 127.00094999999999,
+      "n": 1,
+      "other": {
+        "ETH": 0.05
+      },
+      "first": 1789156024,
+      "last": 1789156024,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 127.00094999999999,
+      "unit": 6.204835516307161e-05
+    },
+    "robinhood:0x4325b1a3811e9d3b76b446d1277592128f6e95c2:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
+      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
+      "chain": "robinhood",
+      "contract": "0x4325b1a3811e9d3b76b446d1277592128f6e95c2",
+      "sym": "PUPPER",
+      "amount": 2210074.946955663,
+      "usd": 120.49328610802276,
+      "counter_usd": 127.00094999999999,
+      "n": 1,
+      "other": {
+        "ETH": 0.05
+      },
+      "first": 1789156024,
+      "last": 1789156024,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 127.00094999999999,
+      "unit": 5.746454443770851e-05
     }
   },
   "last_daily_cut": 1789138800
