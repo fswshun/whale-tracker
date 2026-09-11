@@ -1,5 +1,5 @@
 {
-  "run_count": 514,
+  "run_count": 515,
   "last_daily": "2026-09-10",
   "cross_alerted": [
     [
@@ -10,46 +10,6 @@
     ]
   ],
   "buy_accum": {
-    "robinhood:0x14a04022a8472e080da450429957cd6c66fbb99e:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
-      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
-      "chain": "robinhood",
-      "contract": "0x14a04022a8472e080da450429957cd6c66fbb99e",
-      "sym": "SHOGGOTH",
-      "amount": 29286013.918524783,
-      "usd": 152.58013251551412,
-      "counter_usd": 198.0136,
-      "n": 1,
-      "other": {
-        "ETH": 0.08
-      },
-      "first": 1789009282,
-      "last": 1789009282,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 198.0136,
-      "unit": 6.761370821952218e-06
-    },
-    "robinhood:0x14a04022a8472e080da450429957cd6c66fbb99e:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
-      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
-      "chain": "robinhood",
-      "contract": "0x14a04022a8472e080da450429957cd6c66fbb99e",
-      "sym": "SHOGGOTH",
-      "amount": 17523291.00874474,
-      "usd": 101.70518101475446,
-      "counter_usd": 197.9856,
-      "n": 1,
-      "other": {
-        "ETH": 0.08
-      },
-      "first": 1789009387,
-      "last": 1789009387,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 197.9856,
-      "unit": 1.1298425615439372e-05
-    },
     "robinhood:0x7a492b0a2d630b94791af846c1842db9e623420c:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
       "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
       "chain": "robinhood",
