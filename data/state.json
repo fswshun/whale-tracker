@@ -1,5 +1,5 @@
 {
-  "run_count": 772,
+  "run_count": 773,
   "last_daily": "2026-09-12",
   "cross_alerted": [
     [
@@ -130,26 +130,6 @@
       "value": 251.524,
       "unit": 8.663192692652725e-05
     },
-    "robinhood:0x65498427bf154f80d8e512692c7aeda53f655219:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
-      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
-      "chain": "robinhood",
-      "contract": "0x65498427bf154f80d8e512692c7aeda53f655219",
-      "sym": "RUGFILES",
-      "amount": 2468322.5329874195,
-      "usd": 0.0,
-      "counter_usd": 201.2192,
-      "n": 1,
-      "other": {
-        "ETH": 0.08
-      },
-      "first": 1789164005,
-      "last": 1789164005,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 201.2192,
-      "unit": 8.152062678634776e-05
-    },
     "robinhood:0x8adefbe002d1c770ee5dd7dfd7eaace8e39d22d4:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
       "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
       "chain": "robinhood",
@@ -169,26 +149,6 @@
       "note": "",
       "value": 201.2192,
       "unit": 8.938757916197111e-05
-    },
-    "robinhood:0x65498427bf154f80d8e512692c7aeda53f655219:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
-      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
-      "chain": "robinhood",
-      "contract": "0x65498427bf154f80d8e512692c7aeda53f655219",
-      "sym": "RUGFILES",
-      "amount": 2383001.8669286272,
-      "usd": 0.0,
-      "counter_usd": 201.2192,
-      "n": 1,
-      "other": {
-        "ETH": 0.08
-      },
-      "first": 1789164005,
-      "last": 1789164005,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 201.2192,
-      "unit": 8.443937992350162e-05
     },
     "robinhood:0x8adefbe002d1c770ee5dd7dfd7eaace8e39d22d4:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
       "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
