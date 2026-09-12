@@ -1,5 +1,5 @@
 {
-  "run_count": 780,
+  "run_count": 781,
   "last_daily": "2026-09-12",
   "cross_alerted": [
     [
@@ -49,46 +49,6 @@
       "note": "",
       "value": 965.7408,
       "unit": 4.192881592976345e-05
-    },
-    "robinhood:0xdb1639722a5ff8ed0970bbdd647f8bf818b31e18:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
-      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
-      "chain": "robinhood",
-      "contract": "0xdb1639722a5ff8ed0970bbdd647f8bf818b31e18",
-      "sym": "ANTCOIN",
-      "amount": 2408749.6889319476,
-      "usd": 100.63756200357678,
-      "counter_usd": 251.524,
-      "n": 1,
-      "other": {
-        "ETH": 0.1
-      },
-      "first": 1789170010,
-      "last": 1789170010,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 251.524,
-      "unit": 0.00010442097871594415
-    },
-    "robinhood:0xdb1639722a5ff8ed0970bbdd647f8bf818b31e18:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
-      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
-      "chain": "robinhood",
-      "contract": "0xdb1639722a5ff8ed0970bbdd647f8bf818b31e18",
-      "sym": "ANTCOIN",
-      "amount": 2903363.7935044216,
-      "usd": 121.30253929261474,
-      "counter_usd": 251.524,
-      "n": 1,
-      "other": {
-        "ETH": 0.1
-      },
-      "first": 1789170010,
-      "last": 1789170010,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 251.524,
-      "unit": 8.663192692652725e-05
     },
     "robinhood:0x7dbf38976f6d3b9c529e7d9484a71898b409ee6a:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
       "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
