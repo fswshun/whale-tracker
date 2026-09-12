@@ -1,5 +1,5 @@
 {
-  "run_count": 747,
+  "run_count": 748,
   "last_daily": "2026-09-12",
   "cross_alerted": [
     [
@@ -1309,6 +1309,26 @@
       "note": "",
       "value": 126.5145,
       "unit": 9.60826740567718e-06
+    },
+    "robinhood:0xd25efceb9d690e2a75a8b75e52a7c63cb9a214e0:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
+      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
+      "chain": "robinhood",
+      "contract": "0xd25efceb9d690e2a75a8b75e52a7c63cb9a214e0",
+      "sym": "NOESIS",
+      "amount": 11929837.005642565,
+      "usd": 4348.425588556715,
+      "counter_usd": 3036.192,
+      "n": 4,
+      "other": {
+        "ETH": 1.2000000000000002
+      },
+      "first": 1789233239,
+      "last": 1789233245,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 3036.192,
+      "unit": 0.0002545040639334757
     }
   },
   "last_daily_cut": 1789225200
