@@ -1,5 +1,5 @@
 {
-  "run_count": 749,
+  "run_count": 750,
   "last_daily": "2026-09-12",
   "cross_alerted": [
     [
@@ -10,46 +10,6 @@
     ]
   ],
   "buy_accum": {
-    "robinhood:0x4ffce3a117e17076c072fb95e447b2361f69763b:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
-      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
-      "chain": "robinhood",
-      "contract": "0x4ffce3a117e17076c072fb95e447b2361f69763b",
-      "sym": "SAFEMOON",
-      "amount": 3017483.215493785,
-      "usd": 696.4351261359656,
-      "counter_usd": 616.57968,
-      "n": 4,
-      "other": {
-        "ETH": 0.24000000000000002
-      },
-      "first": 1789147929,
-      "last": 1789147953,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 616.57968,
-      "unit": 0.00020433574471402722
-    },
-    "robinhood:0x4ffce3a117e17076c072fb95e447b2361f69763b:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
-      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
-      "chain": "robinhood",
-      "contract": "0x4ffce3a117e17076c072fb95e447b2361f69763b",
-      "sym": "SAFEMOON",
-      "amount": 1869489.4916835842,
-      "usd": 431.4781746805712,
-      "counter_usd": 359.67148000000003,
-      "n": 3,
-      "other": {
-        "ETH": 0.14
-      },
-      "first": 1789147929,
-      "last": 1789147939,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 359.67148000000003,
-      "unit": 0.00019239021219428996
-    },
     "robinhood:0x0a8b4763c71ac39101b3b8a97e62da0b81549a4f:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
       "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
       "chain": "robinhood",
