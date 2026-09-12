@@ -1,5 +1,5 @@
 {
-  "run_count": 647,
+  "run_count": 648,
   "last_daily": "2026-09-11",
   "cross_alerted": [
     [
@@ -1049,6 +1049,26 @@
       "note": "",
       "value": 502.200196,
       "unit": 0.00010641948409963553
+    },
+    "robinhood:0xbed7c1660a01dbeee225bd893ac31727a91a5773:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
+      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
+      "chain": "robinhood",
+      "contract": "0xbed7c1660a01dbeee225bd893ac31727a91a5773",
+      "sym": "SZR",
+      "amount": 1154021.184387031,
+      "usd": 9810.33408847415,
+      "counter_usd": 10061.48,
+      "n": 2,
+      "other": {
+        "ETH": 4.0
+      },
+      "first": 1789176028,
+      "last": 1789176040,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 10061.48,
+      "unit": 0.008718626777500836
     }
   },
   "last_daily_cut": 1789138800
