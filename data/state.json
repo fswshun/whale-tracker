@@ -1,5 +1,5 @@
 {
-  "run_count": 767,
+  "run_count": 768,
   "last_daily": "2026-09-12",
   "cross_alerted": [
     [
@@ -50,26 +50,6 @@
       "value": 965.7408,
       "unit": 4.192881592976345e-05
     },
-    "robinhood:0x1b836c62a91974bb9e3bd0e254751e9e999963f9:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
-      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
-      "chain": "robinhood",
-      "contract": "0x1b836c62a91974bb9e3bd0e254751e9e999963f9",
-      "sym": "ZALA",
-      "amount": 17875814.210350107,
-      "usd": 626.5472880727713,
-      "counter_usd": 1257.62,
-      "n": 3,
-      "other": {
-        "ETH": 0.5
-      },
-      "first": 1789160320,
-      "last": 1789160326,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 1257.62,
-      "unit": 7.035315903383227e-05
-    },
     "robinhood:0x0318206d6949f91dde089fa5f2819383fa44c226:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
       "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
       "chain": "robinhood",
@@ -109,26 +89,6 @@
       "note": "",
       "value": 628.81,
       "unit": 0.000197966908288975
-    },
-    "robinhood:0x1b836c62a91974bb9e3bd0e254751e9e999963f9:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
-      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
-      "chain": "robinhood",
-      "contract": "0x1b836c62a91974bb9e3bd0e254751e9e999963f9",
-      "sym": "ZALA",
-      "amount": 4330548.204008398,
-      "usd": 151.78571455049433,
-      "counter_usd": 251.524,
-      "n": 1,
-      "other": {
-        "ETH": 0.1
-      },
-      "first": 1789160326,
-      "last": 1789160326,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 251.524,
-      "unit": 5.808133015750453e-05
     },
     "robinhood:0xdb1639722a5ff8ed0970bbdd647f8bf818b31e18:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
       "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
