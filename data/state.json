@@ -1,6 +1,6 @@
 {
-  "run_count": 732,
-  "last_daily": "2026-09-11",
+  "run_count": 733,
+  "last_daily": "2026-09-12",
   "cross_alerted": [
     [
       "2026-09-11",
@@ -10,46 +10,6 @@
     ]
   ],
   "buy_accum": {
-    "robinhood:0xa51afede7e27f4a38147aa378c7179de03cb5594:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
-      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
-      "chain": "robinhood",
-      "contract": "0xa51afede7e27f4a38147aa378c7179de03cb5594",
-      "sym": "DRIPPYPIGEON",
-      "amount": 2633191.832763926,
-      "usd": 1101.7274628284267,
-      "counter_usd": 208.5432,
-      "n": 2,
-      "other": {
-        "ETH": 0.08
-      },
-      "first": 1789139034,
-      "last": 1789139036,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 208.5432,
-      "unit": 7.91978759029884e-05
-    },
-    "robinhood:0xa51afede7e27f4a38147aa378c7179de03cb5594:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
-      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
-      "chain": "robinhood",
-      "contract": "0xa51afede7e27f4a38147aa378c7179de03cb5594",
-      "sym": "DRIPPYPIGEON",
-      "amount": 2649149.754021454,
-      "usd": 1108.4042570825764,
-      "counter_usd": 208.5432,
-      "n": 2,
-      "other": {
-        "ETH": 0.08
-      },
-      "first": 1789139034,
-      "last": 1789139036,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 208.5432,
-      "unit": 7.87208045462239e-05
-    },
     "robinhood:0x6853a84b79c7a4398aee205f0fb6c3f7c89c0dd6:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
       "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
       "chain": "robinhood",
@@ -1291,5 +1251,5 @@
       "unit": 4.898861489176839e-05
     }
   },
-  "last_daily_cut": 1789138800
+  "last_daily_cut": 1789225200
 }
