@@ -1,5 +1,5 @@
 {
-  "run_count": 794,
+  "run_count": 795,
   "last_daily": "2026-09-12",
   "cross_alerted": [
     [
@@ -49,46 +49,6 @@
       "note": "",
       "value": 965.7408,
       "unit": 4.192881592976345e-05
-    },
-    "robinhood:0x2fd1139e2192855def46eef5370f245891eca397:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
-      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
-      "chain": "robinhood",
-      "contract": "0x2fd1139e2192855def46eef5370f245891eca397",
-      "sym": "WeWorm",
-      "amount": 6726805.8669221345,
-      "usd": 169.9191161984531,
-      "counter_usd": 351.8998,
-      "n": 2,
-      "other": {
-        "ETH": 0.14
-      },
-      "first": 1789178042,
-      "last": 1789178137,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 351.8998,
-      "unit": 5.231306015986048e-05
-    },
-    "robinhood:0x2fd1139e2192855def46eef5370f245891eca397:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
-      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
-      "chain": "robinhood",
-      "contract": "0x2fd1139e2192855def46eef5370f245891eca397",
-      "sym": "WeWorm",
-      "amount": 6462935.760025758,
-      "usd": 163.25375729825066,
-      "counter_usd": 351.8998,
-      "n": 2,
-      "other": {
-        "ETH": 0.14
-      },
-      "first": 1789178042,
-      "last": 1789178137,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 351.8998,
-      "unit": 5.444890883436501e-05
     },
     "robinhood:0xdc61e33874e6b764abf986014481c3cc607d1e18:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
       "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
