@@ -1,28 +1,8 @@
 {
-  "run_count": 885,
+  "run_count": 886,
   "last_daily": "2026-09-13",
   "cross_alerted": [],
   "buy_accum": {
-    "robinhood:0xd25efceb9d690e2a75a8b75e52a7c63cb9a214e0:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
-      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
-      "chain": "robinhood",
-      "contract": "0xd25efceb9d690e2a75a8b75e52a7c63cb9a214e0",
-      "sym": "NOESIS",
-      "amount": 11929837.005642565,
-      "usd": 4348.425588556715,
-      "counter_usd": 3036.192,
-      "n": 4,
-      "other": {
-        "ETH": 1.2000000000000002
-      },
-      "first": 1789233239,
-      "last": 1789233245,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 3036.192,
-      "unit": 0.0002545040639334757
-    },
     "robinhood:0xa8480a668d310db784836ac966ea979a1c071e18:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
       "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
       "chain": "robinhood",
