@@ -40,4 +40,4 @@
 2. 修正 → `python3 -m py_compile tracker.py portfolio.py html_report.py`
 3. 検証: `DRY_RUN=1 BLOCKSCOUT_KEY=… NODEREAL_KEY=… HELIUS_KEY=… python3 tracker.py`（他クジラは `WHALE_ROOT=<そのリポの clone>`）
 4. commit → push（各クジラのリポは次の実行で自動的に最新コードを使う）
-5. GitHub 操作（Secrets/Pages/dispatch）は classic PAT（9/13 失効、要再発行）。起動用の細粒度 PAT は cron-job.org 側に設定済み（無期限）
+5. GitHub 操作（push / Secrets / ワークフロー定義 / 実行ログ取得）は classic PAT。スコープは repo と workflow の2つで足りる。Secrets 登録は public_repo では不可で repo が要る。次回失効 2026-12-12。スクリプトは名前の先頭一致で読むのでキー名が変わっても動く）。起動用の細粒度 PAT は cron-job.org 側に設定済み（無期限）
