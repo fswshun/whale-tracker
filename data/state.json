@@ -1,5 +1,5 @@
 {
-  "run_count": 785,
+  "run_count": 786,
   "last_daily": "2026-09-12",
   "cross_alerted": [
     [
@@ -49,26 +49,6 @@
       "note": "",
       "value": 965.7408,
       "unit": 4.192881592976345e-05
-    },
-    "robinhood:0x7dbf38976f6d3b9c529e7d9484a71898b409ee6a:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
-      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
-      "chain": "robinhood",
-      "contract": "0x7dbf38976f6d3b9c529e7d9484a71898b409ee6a",
-      "sym": "ZZZ",
-      "amount": 22998.127482184504,
-      "usd": 1135.187572520627,
-      "counter_usd": 1256.542,
-      "n": 1,
-      "other": {
-        "ETH": 0.5
-      },
-      "first": 1789172881,
-      "last": 1789172881,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 1256.542,
-      "unit": 0.0546367090526557
     },
     "robinhood:0x7dbf38976f6d3b9c529e7d9484a71898b409ee6a:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
       "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
@@ -1149,6 +1129,46 @@
       "note": "",
       "value": 101.0256,
       "unit": 2.1590141874113757e-05
+    },
+    "robinhood:0x8046fc47b996f61410cc0f252a247b7173421dee:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
+      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
+      "chain": "robinhood",
+      "contract": "0x8046fc47b996f61410cc0f252a247b7173421dee",
+      "sym": "YIN",
+      "amount": 2308087.7082345206,
+      "usd": 265.1992776761464,
+      "counter_usd": 252.53600000000003,
+      "n": 2,
+      "other": {
+        "ETH": 0.1
+      },
+      "first": 1789259427,
+      "last": 1789259429,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 252.53600000000003,
+      "unit": 0.00010941351972848871
+    },
+    "robinhood:0x8046fc47b996f61410cc0f252a247b7173421dee:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
+      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
+      "chain": "robinhood",
+      "contract": "0x8046fc47b996f61410cc0f252a247b7173421dee",
+      "sym": "YIN",
+      "amount": 2280607.7397331065,
+      "usd": 262.0418292953339,
+      "counter_usd": 252.53600000000003,
+      "n": 2,
+      "other": {
+        "ETH": 0.1
+      },
+      "first": 1789259428,
+      "last": 1789259429,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 252.53600000000003,
+      "unit": 0.0001107318876456824
     }
   },
   "last_daily_cut": 1789225200
