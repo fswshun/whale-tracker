@@ -1,48 +1,8 @@
 {
-  "run_count": 912,
+  "run_count": 913,
   "last_daily": "2026-09-13",
   "cross_alerted": [],
   "buy_accum": {
-    "robinhood:0xfbd27a7aa6bbbf34f1391c64d3b04a308d841e18:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
-      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
-      "chain": "robinhood",
-      "contract": "0xfbd27a7aa6bbbf34f1391c64d3b04a308d841e18",
-      "sym": "UDAI",
-      "amount": 10193879.979750704,
-      "usd": 449.2442907076136,
-      "counter_usd": 328.3332,
-      "n": 2,
-      "other": {
-        "ETH": 0.13
-      },
-      "first": 1789250483,
-      "last": 1789250498,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 328.3332,
-      "unit": 3.220885478857968e-05
-    },
-    "robinhood:0xfbd27a7aa6bbbf34f1391c64d3b04a308d841e18:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
-      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
-      "chain": "robinhood",
-      "contract": "0xfbd27a7aa6bbbf34f1391c64d3b04a308d841e18",
-      "sym": "UDAI",
-      "amount": 11017760.964211624,
-      "usd": 485.55272569280635,
-      "counter_usd": 328.3332,
-      "n": 2,
-      "other": {
-        "ETH": 0.13
-      },
-      "first": 1789250483,
-      "last": 1789250498,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 328.3332,
-      "unit": 2.9800356085642657e-05
-    },
     "robinhood:0x8046fc47b996f61410cc0f252a247b7173421dee:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
       "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
       "chain": "robinhood",
