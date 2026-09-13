@@ -80,8 +80,8 @@ KNOWN_STABLES = {
     ("solana", "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"), ("solana", "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"),
 }
 MIN_LIQ_USD = 5000     # DexScreener の流動性がこれ未満のペアの価格は使わない（偽トークン・ゴミ価格対策）
-BUY_ALERT_USD = float(CFG.get("buy_alert_usd", 5000))        # 買いはこの額から即時 Telegram（実行をまたぐ分割買いの累計でも可）
-BUY_LIST_MIN_USD = float(CFG.get("buy_list_min_usd", 5000))  # 台帳の買い一覧・新規銘柄の成績に載せる最小額（$1,000 は低すぎる → $5,000。2026-09-08）
+BUY_ALERT_USD = float(CFG.get("buy_alert_usd", 50000))       # 買いの下限。即時 Telegram（実行をまたぐ分割買いの累計でも可）と台帳の両方に効く。2026-09-11 に $5,000 から引き上げ
+BUY_LIST_MIN_USD = BUY_ALERT_USD                             # 台帳の買い一覧・新規銘柄の成績も同じ下限（2026-09-13: 別々の buy_list_min_usd を持つと通知と台帳の数字がずれて混乱するため廃止）
 BUY_ACCUM_H = float(CFG.get("buy_accum_hours", 24))          # 分割買いを累計する時間窓
 MOVE_MIN_USD = float(CFG.get("move_min_usd", 5000))          # 一覧・まとめに載せる最小額
 PRICE_ALERT_PCT = float(CFG.get("price_move_alert_pct", 5))  # 1時間でリスク資産がこの%動いたらまとめを送る

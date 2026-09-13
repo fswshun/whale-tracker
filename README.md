@@ -82,7 +82,7 @@ NODEREAL_KEY=xxxx BLOCKSCOUT_KEY=proapi_xxxx DRY_RUN=1 python tracker.py
 |---|---|
 | `tracker.py` | 本体。取得 → 分類 → 子ウォレット検出 → 残高 → スナップショット → Telegram → HTML |
 | `portfolio.py` | クラスター合算の資産推移、増減分解（値動き / 利確 / 買い）、通知文面 |
-| `html_report.py` | `docs/index.html` の生成（資産レポート＋折りたたみの詳細台帳） |
+| `html_report.py` | `docs/index.html` の生成（資産レポート＋折りたたみの詳細台帳）。銘柄別の日次推移は左が最新・右へ行くほど過去 |
 | `import_csv.py` | Blockscout / BscScan の CSV エクスポートを取り込む（過去分の初期投入・オフライン確認用） |
 | `config.json` | 本体ウォレット・しきい値・相手先ラベル・手動価格 |
 | `data/` | 状態（監視ウォレット一覧、処理済み tx、カーソル、イベント台帳、残高、`snapshots.jsonl`＝資産履歴、EOA判定保留）。Actions が自動でコミット |
@@ -92,7 +92,7 @@ NODEREAL_KEY=xxxx BLOCKSCOUT_KEY=proapi_xxxx DRY_RUN=1 python tracker.py
 
 - `threshold_usd`: 詳細台帳（折りたたみ）の表示しきい値（既定 10,000）
 - `buy_alert_usd`: 買いの即時通知の最小額（既定 50,000。実行をまたぐ分割買いの累計でも可。2026-09-11 に 5,000 から引き上げ）
-- `buy_list_min_usd`: 台帳の買い一覧・新規銘柄の成績に載せる最小額（既定 5,000。$1,000 は低すぎるため 2026-09-08 に引き上げ）
+- 台帳の買い一覧・新規購入銘柄の成績も `buy_alert_usd` と同じ下限（2026-09-13 に一本化。通知と台帳で数字がずれないようにするため、旧 `buy_list_min_usd` は廃止）
 - `sell_alert_usd` / `daily_big_move_usd`: 売り・外部流出の即時通知、日次レポートの「大きな動き」の最小額（既定 100,000）
 - `move_min_usd`: 台帳の売り・流出一覧に載せる最小額（既定 5,000）
 - `daily_report_hour_utc`: 1日の締め＝日次レポートの時刻（既定 15 UTC = 24:00 JST。チャートの時点もこれに揃う）

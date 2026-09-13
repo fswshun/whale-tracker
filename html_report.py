@@ -194,7 +194,7 @@ def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label,
     # --- 日ごとの増減 ---
     if bridges:
         tabs = "".join(f"<button class='tab' data-target='day-{i}' aria-selected='{'true' if i == 0 else 'false'}'>{esc(br['label1'])}</button>" for i, br in enumerate(reversed(bridges)))
-        panels = "".join(bridge_panel(br, names, ctx, i, min_usd, float(tl.get("buy_list_min_usd") or 5000)) for i, br in enumerate(reversed(bridges)))
+        panels = "".join(bridge_panel(br, names, ctx, i, min_usd, float(tl.get("buy_list_min_usd") or 50000)) for i, br in enumerate(reversed(bridges)))
         days = f"<section class='panel'><h2>時点ごとの増減（値動き / 利確 / 買い に分解）</h2><div class='tabs'>{tabs}</div>{panels}</section>"
     else:
         days = f"<section class='panel'><h2>時点ごとの増減</h2><div class='sub'>次の締め（{esc(cut)}）から、前日比の分解（値動き / 利確 / 買い）を表示します。</div></section>"
@@ -214,7 +214,7 @@ def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label,
                     f"<td class='r'>{esc(P.fmt_qty(g['held']))}<div class='sub'>{usd(g['value'])}</div>{sold}</td>"
                     f"<td class='r'>{P.fmt_usd(g['liq']) if g['liq'] else '—'}</td><td class='w sub'>{path}</td>"
                     f"<td>{('<a href=' + chr(39) + esc(link) + chr(39) + ' target=_blank rel=noopener>DexScreener</a>') if link else ''}</td></tr>")
-        newpos_html = (f"<section class='panel'><h2>🆕 新規購入銘柄の成績（直近14日に買った銘柄・支払 ${float(tl.get('buy_list_min_usd') or 5000):,.0f} 以上・平均取得単価に対する現在の損益）</h2><div style='overflow-x:auto'>"
+        newpos_html = (f"<section class='panel'><h2>🆕 新規購入銘柄の成績（直近14日に買った銘柄・支払 ${float(tl.get('buy_list_min_usd') or 50000):,.0f} 以上・平均取得単価に対する現在の損益）</h2><div style='overflow-x:auto'>"
                        "<table><thead><tr><th>銘柄 / 買い手</th><th>初回買い(JST)</th><th class='r'>買った枚数 / 支払額</th><th class='r'>平均取得</th><th class='r'>いま</th><th class='r'>損益</th><th class='r'>前時点比</th><th class='r'>現在保有 / 評価</th><th class='r'>流動性</th><th>買ってからの価格</th><th></th></tr></thead><tbody>"
                        + "".join(nrow(g) for g in newpos[:30]) + "</tbody></table></div>"
                        "<div class='sub'>平均取得＝支払った ETH/BNB の時価 ÷ 受け取った枚数（スリッページ込みの実質単価）。損益＝いまの価格 ÷ 平均取得 − 1。既存の大型銘柄（PONS 等）の推移は上のタブへ。</div></section>")
@@ -234,16 +234,18 @@ def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label,
             b = f"累計 <span class='{cls_delta(dstart or 0)}'>{P.fmt_pct(dstart)}</span>" if dstart is not None else "累計 —"
             return f"<div class='sub'>{a} · {b}</div>"
         def table(mode):
-            head = "".join(f"<th class='r'>{esc(pt['label'])}{' <span class=mute>推定</span>' if pt['approx'] else ''}</th>" for pt in P_)
+            idx = list(range(n))[::-1]     # 表示は新しい順（左が最新・右へ行くほど過去）。前日比と累計の計算は時系列のまま
+            head = "".join(f"<th class='r'>{esc(P_[i]['label'])}{' <span class=mute>推定</span>' if P_[i]['approx'] else ''}</th>" for i in idx)
             body = ""
             if mode == "usd":
                 for name, key in (("総資産", "total"), ("リスク資産", "risk")):
                     vals = [tt[key] for tt in mx["totals"]]
-                    cells = "".join(f"<td class='r'><b>{P.fmt_usd(v)}</b>{sub(pct(v, vals[i-1]) if i else None, pct(v, vals[0]) if i else None)}</td>" for i, v in enumerate(vals))
+                    cells = "".join(f"<td class='r'><b>{P.fmt_usd(vals[i])}</b>{sub(pct(vals[i], vals[i-1]) if i else None, pct(vals[i], vals[0]) if i else None)}</td>" for i in idx)
                     body += f"<tr><td><b>{name}</b></td>{cells}</tr>"
             for r in mx["rows"]:
                 cells = ""; first = next((c for c in r["cells"] if c), None)
-                for i, c in enumerate(r["cells"]):
+                for i in idx:
+                    c = r["cells"][i]
                     if not c: cells += "<td class='r mute'>—</td>"; continue
                     prev = next((r["cells"][j] for j in range(i - 1, -1, -1) if r["cells"][j]), None) if i else None
                     if mode == "usd":
@@ -258,7 +260,7 @@ def render(cfg, chains, wallets, events, holdings, batch_list, threshold, label,
         matrix_html = (f"<section class='panel'><h2>銘柄別の日次推移（各セルに 前日比 と 開始日からの累計 を表示。毎日 {esc(cut)} 時点）</h2>"
                        "<div class='tabs'><button class='tab mtab' data-target='mode-usd' aria-selected='true'>評価額</button><button class='tab mtab' data-target='mode-px' aria-selected='false'>単価</button><button class='tab mtab' data-target='mode-amt' aria-selected='false'>枚数</button></div>"
                        + table("usd") + table("px") + table("amt")
-                       + f"<div class='sub'>対象＝現在の評価額上位 {len([r for r in mx['rows']])} 銘柄＋直近14日の新規購入銘柄。「推定」の列は記録開始前を取引から逆算したもので単価は 9/6 朝の値。累計の起点は {esc(P_[0]['label'])}。</div></section>")
+                       + f"<div class='sub'>左が最新、右へ行くほど過去。対象＝現在の評価額上位 {len([r for r in mx['rows']])} 銘柄＋直近14日の新規購入銘柄。「推定」の列は記録開始前を取引から逆算したもので単価は 9/6 朝の値。累計の起点は {esc(P_[0]['label'])}。</div></section>")
     # --- 現在のポジション（クラスター合算、上位） ---
     pos_rows = ""
     if cur:
