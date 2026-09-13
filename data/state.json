@@ -1,5 +1,5 @@
 {
-  "run_count": 899,
+  "run_count": 900,
   "last_daily": "2026-09-13",
   "cross_alerted": [],
   "buy_accum": {
@@ -82,26 +82,6 @@
       "note": "",
       "value": 883.9739999999999,
       "unit": 3.181064079195676e-05
-    },
-    "robinhood:0xe27501d787d647cc82a5b4a7eafd5750386f1b77:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
-      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
-      "chain": "robinhood",
-      "contract": "0xe27501d787d647cc82a5b4a7eafd5750386f1b77",
-      "sym": "TWINE",
-      "amount": 3898823.734351098,
-      "usd": 4834.541430595362,
-      "counter_usd": 757.692,
-      "n": 3,
-      "other": {
-        "ETH": 0.30000000000000004
-      },
-      "first": 1789241945,
-      "last": 1789241947,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 757.692,
-      "unit": 0.0001943386138040187
     },
     "robinhood:0xa8480a668d310db784836ac966ea979a1c071e18:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
       "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
@@ -263,26 +243,6 @@
       "value": 328.3332,
       "unit": 2.9800356085642657e-05
     },
-    "robinhood:0xd1b35bce1d0b28ccc485d163ddf66dd9cfa51e18:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
-      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
-      "chain": "robinhood",
-      "contract": "0xd1b35bce1d0b28ccc485d163ddf66dd9cfa51e18",
-      "sym": "TULIPCOIN",
-      "amount": 9148619.888589866,
-      "usd": 183.7957735617704,
-      "counter_usd": 252.564,
-      "n": 1,
-      "other": {
-        "ETH": 0.1
-      },
-      "first": 1789241839,
-      "last": 1789241839,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 252.564,
-      "unit": 2.7606786933513012e-05
-    },
     "robinhood:0x637ac5bb38a00b84820c0eb0aaf06f8a08ef4bea:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
       "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
       "chain": "robinhood",
@@ -302,26 +262,6 @@
       "note": "",
       "value": 252.564,
       "unit": 3.3437348411442274e-05
-    },
-    "robinhood:0xd1b35bce1d0b28ccc485d163ddf66dd9cfa51e18:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
-      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
-      "chain": "robinhood",
-      "contract": "0xd1b35bce1d0b28ccc485d163ddf66dd9cfa51e18",
-      "sym": "TULIPCOIN",
-      "amount": 9765316.207764793,
-      "usd": 196.18520261399468,
-      "counter_usd": 252.564,
-      "n": 1,
-      "other": {
-        "ETH": 0.1
-      },
-      "first": 1789241839,
-      "last": 1789241839,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 252.564,
-      "unit": 2.5863371408206554e-05
     },
     "robinhood:0x637ac5bb38a00b84820c0eb0aaf06f8a08ef4bea:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
       "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
