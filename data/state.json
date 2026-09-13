@@ -1,5 +1,5 @@
 {
-  "run_count": 905,
+  "run_count": 906,
   "last_daily": "2026-09-13",
   "cross_alerted": [],
   "buy_accum": {
@@ -83,26 +83,6 @@
       "value": 757.692,
       "unit": 0.001019808566926701
     },
-    "robinhood:0x5909eeff6ac40b33ac7b088602e05edf591223ac:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
-      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
-      "chain": "robinhood",
-      "contract": "0x5909eeff6ac40b33ac7b088602e05edf591223ac",
-      "sym": "UNITY",
-      "amount": 3742223.5388851864,
-      "usd": 129.18155656231664,
-      "counter_usd": 505.128,
-      "n": 2,
-      "other": {
-        "ETH": 0.2
-      },
-      "first": 1789246283,
-      "last": 1789246284,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 505.128,
-      "unit": 0.00013498071260341607
-    },
     "robinhood:0xc1a036b7252289b24fc3a6a778b18bd6f4182b06:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
       "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
       "chain": "robinhood",
@@ -123,26 +103,6 @@
       "value": 505.128,
       "unit": 0.0006995029921993728
     },
-    "robinhood:0x5909eeff6ac40b33ac7b088602e05edf591223ac:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
-      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
-      "chain": "robinhood",
-      "contract": "0x5909eeff6ac40b33ac7b088602e05edf591223ac",
-      "sym": "UNITY",
-      "amount": 4030741.3704619757,
-      "usd": 139.1411921083474,
-      "counter_usd": 505.128,
-      "n": 2,
-      "other": {
-        "ETH": 0.2
-      },
-      "first": 1789246283,
-      "last": 1789246284,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 505.128,
-      "unit": 0.00012531888145979103
-    },
     "robinhood:0xc1a036b7252289b24fc3a6a778b18bd6f4182b06:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
       "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
       "chain": "robinhood",
@@ -162,26 +122,6 @@
       "note": "",
       "value": 505.128,
       "unit": 0.0006805652744126286
-    },
-    "robinhood:0x564c5f47816fa7a33e6a87809662282313011e18:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
-      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
-      "chain": "robinhood",
-      "contract": "0x564c5f47816fa7a33e6a87809662282313011e18",
-      "sym": "CATICOIN",
-      "amount": 17325507.130041305,
-      "usd": 360.54380337615953,
-      "counter_usd": 505.12799999999993,
-      "n": 2,
-      "other": {
-        "ETH": 0.2
-      },
-      "first": 1789246505,
-      "last": 1789246523,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 505.12799999999993,
-      "unit": 2.9155163898443165e-05
     },
     "robinhood:0xfbd27a7aa6bbbf34f1391c64d3b04a308d841e18:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
       "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
