@@ -1,26 +1,8 @@
 {
-  "run_count": 1016,
+  "run_count": 1017,
   "last_daily": "2026-09-14",
   "cross_alerted": [],
   "buy_accum": {
-    "robinhood:0xd9d674b04a72affe00e06385535eaac10b988fca:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
-      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
-      "chain": "robinhood",
-      "contract": "0xd9d674b04a72affe00e06385535eaac10b988fca",
-      "sym": "DRILL",
-      "amount": 87512.88011299999,
-      "usd": 48008.48192620296,
-      "counter_usd": 0.0,
-      "n": 4,
-      "other": {},
-      "first": 1789321371,
-      "last": 1789358622,
-      "runs": 3,
-      "funding": 115931.78,
-      "note": "09-13T15:30 1.54e+04 DRILL\u300109-13T17:46 1.54e+04 DRILL\u300109-13T19:54 2.97e+04 DRILL",
-      "value": 48008.48192620296,
-      "unit": 0.5485876120659332
-    },
     "robinhood:0x1cdb289befdfac8af945a288bcdccc382cb34d32:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
       "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
       "chain": "robinhood",
@@ -220,6 +202,26 @@
       "note": "",
       "value": 200.74240000000003,
       "unit": 8.934070951419244e-06
+    },
+    "robinhood:0xcacb0e9caccee63ec4d82952e561a291c68bcb68:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
+      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
+      "chain": "robinhood",
+      "contract": "0xcacb0e9caccee63ec4d82952e561a291c68bcb68",
+      "sym": "GG",
+      "amount": 767762.3972190153,
+      "usd": 1163.1600317868083,
+      "counter_usd": 1252.465,
+      "n": 1,
+      "other": {
+        "ETH": 0.5
+      },
+      "first": 1789400071,
+      "last": 1789400071,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 1252.465,
+      "unit": 0.001631318497150514
     }
   },
   "last_daily_cut": 1789398000
