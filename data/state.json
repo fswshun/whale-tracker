@@ -1,48 +1,8 @@
 {
-  "run_count": 1085,
+  "run_count": 1086,
   "last_daily": "2026-09-14",
   "cross_alerted": [],
   "buy_accum": {
-    "robinhood:0xf22afe30423a09b1444fd8f3ee687db42b16d532:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
-      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
-      "chain": "robinhood",
-      "contract": "0xf22afe30423a09b1444fd8f3ee687db42b16d532",
-      "sym": "ROOM42",
-      "amount": 20973447.125219993,
-      "usd": 0.0,
-      "counter_usd": 200.74240000000003,
-      "n": 1,
-      "other": {
-        "ETH": 0.08
-      },
-      "first": 1789357585,
-      "last": 1789357585,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 200.74240000000003,
-      "unit": 9.57126402739075e-06
-    },
-    "robinhood:0xf22afe30423a09b1444fd8f3ee687db42b16d532:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
-      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
-      "chain": "robinhood",
-      "contract": "0xf22afe30423a09b1444fd8f3ee687db42b16d532",
-      "sym": "ROOM42",
-      "amount": 22469308.906496942,
-      "usd": 0.0,
-      "counter_usd": 200.74240000000003,
-      "n": 1,
-      "other": {
-        "ETH": 0.08
-      },
-      "first": 1789357585,
-      "last": 1789357585,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 200.74240000000003,
-      "unit": 8.934070951419244e-06
-    },
     "robinhood:0xcacb0e9caccee63ec4d82952e561a291c68bcb68:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
       "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
       "chain": "robinhood",
@@ -160,26 +120,6 @@
       "note": "",
       "value": 251.537,
       "unit": 0.0003635552813183475
-    },
-    "robinhood:0xf22afe30423a09b1444fd8f3ee687db42b16d532:0xe51528cfc93cacf2d22c145425a91173b24f5642": {
-      "wallet": "0xe51528cfc93cacf2d22c145425a91173b24f5642",
-      "chain": "robinhood",
-      "contract": "0xf22afe30423a09b1444fd8f3ee687db42b16d532",
-      "sym": "ROOM42",
-      "amount": 17283795.666292194,
-      "usd": 0.0,
-      "counter_usd": 201.2296,
-      "n": 1,
-      "other": {
-        "ETH": 0.08
-      },
-      "first": 1789357585,
-      "last": 1789357585,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 201.2296,
-      "unit": 1.164267409111119e-05
     },
     "robinhood:0x88ad8ddf1e3898412146a534538d418c6f8a9062:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
       "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
