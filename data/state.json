@@ -1,5 +1,5 @@
 {
-  "run_count": 1211,
+  "run_count": 1212,
   "last_daily": "2026-09-15",
   "cross_alerted": [],
   "buy_accum": {
@@ -20,66 +20,6 @@
       "note": "09-13T15:30 1.54e+04 DRILL\u300109-13T17:46 1.54e+04 DRILL\u300109-13T19:54 2.97e+04 DRILL",
       "value": 24859.590722146597,
       "unit": 0.3569783966655265
-    },
-    "robinhood:0x2c3d79888e099ba777b32d79dfaab4ed89d06b31:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
-      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
-      "chain": "robinhood",
-      "contract": "0x2c3d79888e099ba777b32d79dfaab4ed89d06b31",
-      "sym": "?",
-      "amount": 2259043.6862850543,
-      "usd": 611.7490302459928,
-      "counter_usd": 754.0260000000001,
-      "n": 3,
-      "other": {
-        "ETH": 0.30000000000000004
-      },
-      "first": 1789440047,
-      "last": 1789440053,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 754.0260000000001,
-      "unit": 0.00033378106168454783
-    },
-    "robinhood:0x2c3d79888e099ba777b32d79dfaab4ed89d06b31:0xe51528cfc93cacf2d22c145425a91173b24f5642": {
-      "wallet": "0xe51528cfc93cacf2d22c145425a91173b24f5642",
-      "chain": "robinhood",
-      "contract": "0x2c3d79888e099ba777b32d79dfaab4ed89d06b31",
-      "sym": "?",
-      "amount": 2226872.129458761,
-      "usd": 603.0369726574324,
-      "counter_usd": 754.0260000000001,
-      "n": 3,
-      "other": {
-        "ETH": 0.30000000000000004
-      },
-      "first": 1789440047,
-      "last": 1789440053,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 754.0260000000001,
-      "unit": 0.0003386031869657758
-    },
-    "robinhood:0x2c3d79888e099ba777b32d79dfaab4ed89d06b31:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
-      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
-      "chain": "robinhood",
-      "contract": "0x2c3d79888e099ba777b32d79dfaab4ed89d06b31",
-      "sym": "breadpeople",
-      "amount": 707867.2991380357,
-      "usd": 64.15401332088018,
-      "counter_usd": 251.1002,
-      "n": 1,
-      "other": {
-        "ETH": 0.1
-      },
-      "first": 1789440053,
-      "last": 1789440053,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 251.1002,
-      "unit": 0.00035472778627542573
     },
     "robinhood:0x48dc7cac0c77fdda9ce107ffaa1780930afc24cc:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
       "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
