@@ -1,5 +1,5 @@
 {
-  "run_count": 1298,
+  "run_count": 1299,
   "last_daily": "2026-09-16",
   "cross_alerted": [],
   "buy_accum": {
@@ -20,26 +20,6 @@
       "note": "09-13T15:30 1.54e+04 DRILL\u300109-13T17:46 1.54e+04 DRILL\u300109-13T19:54 2.97e+04 DRILL",
       "value": 27799.588017336937,
       "unit": 0.34485175109406496
-    },
-    "base:0xc005627a90bd65f8e92dc89594bcc6e79b511c8f:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
-      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
-      "chain": "base",
-      "contract": "0xc005627a90bd65f8e92dc89594bcc6e79b511c8f",
-      "sym": "SHIT",
-      "amount": 17531492.72928567,
-      "usd": 7875.146533995123,
-      "counter_usd": 5884.018,
-      "n": 5,
-      "other": {
-        "ETH": 2.45
-      },
-      "first": 1789493787,
-      "last": 1789493797,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 5884.018,
-      "unit": 0.0003356256133381603
     }
   },
   "last_daily_cut": 1789570800
