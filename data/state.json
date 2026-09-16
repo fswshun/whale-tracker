@@ -1,5 +1,5 @@
 {
-  "run_count": 1199,
+  "run_count": 1200,
   "last_daily": "2026-09-15",
   "cross_alerted": [],
   "buy_accum": {
@@ -140,6 +140,26 @@
       "note": "",
       "value": 479.43000000000006,
       "unit": 0.0003343083449231147
+    },
+    "base:0xc005627a90bd65f8e92dc89594bcc6e79b511c8f:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
+      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
+      "chain": "base",
+      "contract": "0xc005627a90bd65f8e92dc89594bcc6e79b511c8f",
+      "sym": "SHIT",
+      "amount": 17531492.72928567,
+      "usd": 7875.146533995123,
+      "counter_usd": 5884.018,
+      "n": 5,
+      "other": {
+        "ETH": 2.45
+      },
+      "first": 1789493787,
+      "last": 1789493797,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 5884.018,
+      "unit": 0.0003356256133381603
     }
   },
   "last_daily_cut": 1789484400
