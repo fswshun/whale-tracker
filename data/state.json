@@ -1,26 +1,8 @@
 {
-  "run_count": 1420,
+  "run_count": 1421,
   "last_daily": "2026-09-17",
   "cross_alerted": [],
   "buy_accum": {
-    "robinhood:0xd9d674b04a72affe00e06385535eaac10b988fca:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
-      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
-      "chain": "robinhood",
-      "contract": "0xd9d674b04a72affe00e06385535eaac10b988fca",
-      "sym": "DRILL",
-      "amount": 97076.8473576,
-      "usd": 33767.676124461934,
-      "counter_usd": 0.0,
-      "n": 7,
-      "other": {},
-      "first": 1789413245,
-      "last": 1789573154,
-      "runs": 5,
-      "funding": 692738.1171027865,
-      "note": "09-13T15:30 1.54e+04 DRILL\u300109-13T17:46 1.54e+04 DRILL\u300109-13T19:54 2.97e+04 DRILL",
-      "value": 33767.676124461934,
-      "unit": 0.3478447955780088
-    },
     "robinhood:0x471f88ee872011ded019facc577df830da8eb3aa:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
       "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
       "chain": "robinhood",
