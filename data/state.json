@@ -1,68 +1,8 @@
 {
-  "run_count": 1456,
+  "run_count": 1457,
   "last_daily": "2026-09-17",
   "cross_alerted": [],
   "buy_accum": {
-    "robinhood:0x45612ee5a5b1642ddb73f612de964c7065531e18:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
-      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
-      "chain": "robinhood",
-      "contract": "0x45612ee5a5b1642ddb73f612de964c7065531e18",
-      "sym": "SPECSY",
-      "amount": 14762970.372499133,
-      "usd": 1175.722960465831,
-      "counter_usd": 605.09,
-      "n": 4,
-      "other": {
-        "ETH": 0.25
-      },
-      "first": 1789601993,
-      "last": 1789602112,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 605.09,
-      "unit": 4.098700903221877e-05
-    },
-    "robinhood:0x45612ee5a5b1642ddb73f612de964c7065531e18:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
-      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
-      "chain": "robinhood",
-      "contract": "0x45612ee5a5b1642ddb73f612de964c7065531e18",
-      "sym": "SPECSY",
-      "amount": 7534775.21370167,
-      "usd": 600.0694980192011,
-      "counter_usd": 363.05400000000003,
-      "n": 3,
-      "other": {
-        "ETH": 0.15000000000000002
-      },
-      "first": 1789602110,
-      "last": 1789602112,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 363.05400000000003,
-      "unit": 4.818378647047117e-05
-    },
-    "robinhood:0x45612ee5a5b1642ddb73f612de964c7065531e18:0xe51528cfc93cacf2d22c145425a91173b24f5642": {
-      "wallet": "0xe51528cfc93cacf2d22c145425a91173b24f5642",
-      "chain": "robinhood",
-      "contract": "0x45612ee5a5b1642ddb73f612de964c7065531e18",
-      "sym": "SPECSY",
-      "amount": 7530757.224544425,
-      "usd": 599.7495053627181,
-      "counter_usd": 363.05400000000003,
-      "n": 3,
-      "other": {
-        "ETH": 0.15000000000000002
-      },
-      "first": 1789602110,
-      "last": 1789602112,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 363.05400000000003,
-      "unit": 4.820949463311946e-05
-    },
     "robinhood:0x5efb5041eaa107f497c53dc3e3f0214515fe5c49:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
       "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
       "chain": "robinhood",
