@@ -1,5 +1,5 @@
 {
-  "run_count": 1330,
+  "run_count": 1331,
   "last_daily": "2026-09-16",
   "cross_alerted": [],
   "buy_accum": {
@@ -140,6 +140,66 @@
       "note": "",
       "value": 363.05400000000003,
       "unit": 4.820949463311946e-05
+    },
+    "robinhood:0x5efb5041eaa107f497c53dc3e3f0214515fe5c49:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
+      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
+      "chain": "robinhood",
+      "contract": "0x5efb5041eaa107f497c53dc3e3f0214515fe5c49",
+      "sym": "?",
+      "amount": 18459172.83795615,
+      "usd": 0.0,
+      "counter_usd": 121.2024,
+      "n": 1,
+      "other": {
+        "ETH": 0.05
+      },
+      "first": 1789605628,
+      "last": 1789605628,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 121.2024,
+      "unit": 6.565971350069436e-06
+    },
+    "robinhood:0x5efb5041eaa107f497c53dc3e3f0214515fe5c49:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
+      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
+      "chain": "robinhood",
+      "contract": "0x5efb5041eaa107f497c53dc3e3f0214515fe5c49",
+      "sym": "?",
+      "amount": 16078619.252079347,
+      "usd": 0.0,
+      "counter_usd": 121.2024,
+      "n": 1,
+      "other": {
+        "ETH": 0.05
+      },
+      "first": 1789605628,
+      "last": 1789605628,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 121.2024,
+      "unit": 7.538109964531043e-06
+    },
+    "robinhood:0x5efb5041eaa107f497c53dc3e3f0214515fe5c49:0xe51528cfc93cacf2d22c145425a91173b24f5642": {
+      "wallet": "0xe51528cfc93cacf2d22c145425a91173b24f5642",
+      "chain": "robinhood",
+      "contract": "0x5efb5041eaa107f497c53dc3e3f0214515fe5c49",
+      "sym": "?",
+      "amount": 16858032.001135044,
+      "usd": 0.0,
+      "counter_usd": 121.2024,
+      "n": 1,
+      "other": {
+        "ETH": 0.05
+      },
+      "first": 1789605628,
+      "last": 1789605628,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 121.2024,
+      "unit": 7.189593660270635e-06
     }
   },
   "last_daily_cut": 1789570800
