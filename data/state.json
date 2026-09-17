@@ -8,18 +8,138 @@
       "chain": "robinhood",
       "contract": "0xd9d674b04a72affe00e06385535eaac10b988fca",
       "sym": "DRILL",
-      "amount": 80613.1560276,
-      "usd": 27799.588017336937,
+      "amount": 97076.8473576,
+      "usd": 33772.61523186094,
       "counter_usd": 0.0,
-      "n": 6,
+      "n": 7,
       "other": {},
       "first": 1789413245,
-      "last": 1789528612,
-      "runs": 4,
-      "funding": 571583.8482185244,
+      "last": 1789573154,
+      "runs": 5,
+      "funding": 692738.1171027865,
       "note": "09-13T15:30 1.54e+04 DRILL\u300109-13T17:46 1.54e+04 DRILL\u300109-13T19:54 2.97e+04 DRILL",
-      "value": 27799.588017336937,
-      "unit": 0.34485175109406496
+      "value": 33772.61523186094,
+      "unit": 0.3478956739031032
+    },
+    "robinhood:0x471f88ee872011ded019facc577df830da8eb3aa:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
+      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
+      "chain": "robinhood",
+      "contract": "0x471f88ee872011ded019facc577df830da8eb3aa",
+      "sym": "HUG",
+      "amount": 3666813.5657440186,
+      "usd": 629.2252078816736,
+      "counter_usd": 724.161,
+      "n": 1,
+      "other": {
+        "ETH": 0.3
+      },
+      "first": 1789585099,
+      "last": 1789585099,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 724.161,
+      "unit": 0.00019749054240587313
+    },
+    "robinhood:0x471f88ee872011ded019facc577df830da8eb3aa:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
+      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
+      "chain": "robinhood",
+      "contract": "0x471f88ee872011ded019facc577df830da8eb3aa",
+      "sym": "HUG",
+      "amount": 3944408.5254804837,
+      "usd": 676.860502972451,
+      "counter_usd": 724.161,
+      "n": 1,
+      "other": {
+        "ETH": 0.3
+      },
+      "first": 1789585099,
+      "last": 1789585099,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 724.161,
+      "unit": 0.00018359178450254136
+    },
+    "robinhood:0x471f88ee872011ded019facc577df830da8eb3aa:0xe51528cfc93cacf2d22c145425a91173b24f5642": {
+      "wallet": "0xe51528cfc93cacf2d22c145425a91173b24f5642",
+      "chain": "robinhood",
+      "contract": "0x471f88ee872011ded019facc577df830da8eb3aa",
+      "sym": "HUG",
+      "amount": 4603254.417676924,
+      "usd": 789.9184580733601,
+      "counter_usd": 724.161,
+      "n": 1,
+      "other": {
+        "ETH": 0.3
+      },
+      "first": 1789585099,
+      "last": 1789585099,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 724.161,
+      "unit": 0.00015731500679587785
+    },
+    "robinhood:0x45612ee5a5b1642ddb73f612de964c7065531e18:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
+      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
+      "chain": "robinhood",
+      "contract": "0x45612ee5a5b1642ddb73f612de964c7065531e18",
+      "sym": "SPECSY",
+      "amount": 14762970.372499133,
+      "usd": 2224.779635135619,
+      "counter_usd": 603.4675,
+      "n": 4,
+      "other": {
+        "ETH": 0.25
+      },
+      "first": 1789601993,
+      "last": 1789602112,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 603.4675,
+      "unit": 4.08771056754375e-05
+    },
+    "robinhood:0x45612ee5a5b1642ddb73f612de964c7065531e18:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
+      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
+      "chain": "robinhood",
+      "contract": "0x45612ee5a5b1642ddb73f612de964c7065531e18",
+      "sym": "SPECSY",
+      "amount": 7534775.21370167,
+      "usd": 1135.4906247048416,
+      "counter_usd": 362.08050000000003,
+      "n": 3,
+      "other": {
+        "ETH": 0.15000000000000002
+      },
+      "first": 1789602110,
+      "last": 1789602112,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 362.08050000000003,
+      "unit": 4.805458553581956e-05
+    },
+    "robinhood:0x45612ee5a5b1642ddb73f612de964c7065531e18:0xe51528cfc93cacf2d22c145425a91173b24f5642": {
+      "wallet": "0xe51528cfc93cacf2d22c145425a91173b24f5642",
+      "chain": "robinhood",
+      "contract": "0x45612ee5a5b1642ddb73f612de964c7065531e18",
+      "sym": "SPECSY",
+      "amount": 7530757.224544425,
+      "usd": 1134.885113738845,
+      "counter_usd": 362.08050000000003,
+      "n": 3,
+      "other": {
+        "ETH": 0.15000000000000002
+      },
+      "first": 1789602110,
+      "last": 1789602112,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 362.08050000000003,
+      "unit": 4.808022476410454e-05
     }
   },
   "last_daily_cut": 1789570800
