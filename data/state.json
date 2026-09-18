@@ -498,6 +498,66 @@
       "note": "",
       "value": 493.132,
       "unit": 3.106772325849399e-05
+    },
+    "robinhood:0x45c94a25d951d652c2d09e9f6f7d6c0d75dd8d23:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
+      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
+      "chain": "robinhood",
+      "contract": "0x45c94a25d951d652c2d09e9f6f7d6c0d75dd8d23",
+      "sym": "MOG",
+      "amount": 53330.26244233476,
+      "usd": 401.5768761907808,
+      "counter_usd": 608.7239999999999,
+      "n": 3,
+      "other": {
+        "ETH": 0.24
+      },
+      "first": 1789738928,
+      "last": 1789738983,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 608.7239999999999,
+      "unit": 0.011414232222431014
+    },
+    "robinhood:0x45c94a25d951d652c2d09e9f6f7d6c0d75dd8d23:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
+      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
+      "chain": "robinhood",
+      "contract": "0x45c94a25d951d652c2d09e9f6f7d6c0d75dd8d23",
+      "sym": "MOG",
+      "amount": 55776.15620824494,
+      "usd": 419.9944562480845,
+      "counter_usd": 608.7239999999999,
+      "n": 3,
+      "other": {
+        "ETH": 0.24
+      },
+      "first": 1789738928,
+      "last": 1789738983,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 608.7239999999999,
+      "unit": 0.010913695768623388
+    },
+    "robinhood:0x45c94a25d951d652c2d09e9f6f7d6c0d75dd8d23:0xe51528cfc93cacf2d22c145425a91173b24f5642": {
+      "wallet": "0xe51528cfc93cacf2d22c145425a91173b24f5642",
+      "chain": "robinhood",
+      "contract": "0x45c94a25d951d652c2d09e9f6f7d6c0d75dd8d23",
+      "sym": "MOG",
+      "amount": 54906.185410151884,
+      "usd": 413.4435761384437,
+      "counter_usd": 608.7239999999999,
+      "n": 3,
+      "other": {
+        "ETH": 0.24
+      },
+      "first": 1789738928,
+      "last": 1789738983,
+      "runs": 1,
+      "funding": 0.0,
+      "note": "",
+      "value": 608.7239999999999,
+      "unit": 0.011086619757916197
     }
   },
   "last_daily_cut": 1789657200
