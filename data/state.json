@@ -1,5 +1,5 @@
 {
-  "run_count": 1571,
+  "run_count": 1572,
   "last_daily": "2026-09-18",
   "cross_alerted": [],
   "buy_accum": {
@@ -98,66 +98,6 @@
       "note": "",
       "value": 244.53200000000004,
       "unit": 2.8029524854337938e-05
-    },
-    "robinhood:0x2da1318474d4291fa198057ffe98bed9a479dd43:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
-      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
-      "chain": "robinhood",
-      "contract": "0x2da1318474d4291fa198057ffe98bed9a479dd43",
-      "sym": "SOH",
-      "amount": 18211695.44241063,
-      "usd": 0.0,
-      "counter_usd": 122.26600000000002,
-      "n": 1,
-      "other": {
-        "ETH": 0.05
-      },
-      "first": 1789675372,
-      "last": 1789675372,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 122.26600000000002,
-      "unit": 6.713597884756633e-06
-    },
-    "robinhood:0x2da1318474d4291fa198057ffe98bed9a479dd43:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
-      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
-      "chain": "robinhood",
-      "contract": "0x2da1318474d4291fa198057ffe98bed9a479dd43",
-      "sym": "SOH",
-      "amount": 23004240.855364665,
-      "usd": 0.0,
-      "counter_usd": 122.26600000000002,
-      "n": 1,
-      "other": {
-        "ETH": 0.05
-      },
-      "first": 1789675372,
-      "last": 1789675372,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 122.26600000000002,
-      "unit": 5.314933049463668e-06
-    },
-    "robinhood:0x2da1318474d4291fa198057ffe98bed9a479dd43:0xe51528cfc93cacf2d22c145425a91173b24f5642": {
-      "wallet": "0xe51528cfc93cacf2d22c145425a91173b24f5642",
-      "chain": "robinhood",
-      "contract": "0x2da1318474d4291fa198057ffe98bed9a479dd43",
-      "sym": "SOH",
-      "amount": 25029067.617836762,
-      "usd": 0.0,
-      "counter_usd": 122.26600000000002,
-      "n": 1,
-      "other": {
-        "ETH": 0.05
-      },
-      "first": 1789675372,
-      "last": 1789675372,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 122.26600000000002,
-      "unit": 4.884960233711149e-06
     },
     "robinhood:0x5d102d1e69e77591d486aa4f663b3645151bbdf6:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
       "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
