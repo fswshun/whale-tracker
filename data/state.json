@@ -1,68 +1,8 @@
 {
-  "run_count": 1607,
+  "run_count": 1608,
   "last_daily": "2026-09-18",
   "cross_alerted": [],
   "buy_accum": {
-    "robinhood:0xb70759876cd5f94efffa17f4d79007be8f2c1e18:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
-      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
-      "chain": "robinhood",
-      "contract": "0xb70759876cd5f94efffa17f4d79007be8f2c1e18",
-      "sym": "AIRGAP",
-      "amount": 14838906.033807721,
-      "usd": 459.41253080668713,
-      "counter_usd": 493.132,
-      "n": 2,
-      "other": {
-        "ETH": 0.2
-      },
-      "first": 1789700780,
-      "last": 1789700958,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 493.132,
-      "unit": 3.3232368941247375e-05
-    },
-    "robinhood:0xb70759876cd5f94efffa17f4d79007be8f2c1e18:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
-      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
-      "chain": "robinhood",
-      "contract": "0xb70759876cd5f94efffa17f4d79007be8f2c1e18",
-      "sym": "AIRGAP",
-      "amount": 14726507.664552595,
-      "usd": 455.9326772945484,
-      "counter_usd": 493.132,
-      "n": 2,
-      "other": {
-        "ETH": 0.2
-      },
-      "first": 1789700780,
-      "last": 1789700958,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 493.132,
-      "unit": 3.348601115979399e-05
-    },
-    "robinhood:0xb70759876cd5f94efffa17f4d79007be8f2c1e18:0xe51528cfc93cacf2d22c145425a91173b24f5642": {
-      "wallet": "0xe51528cfc93cacf2d22c145425a91173b24f5642",
-      "chain": "robinhood",
-      "contract": "0xb70759876cd5f94efffa17f4d79007be8f2c1e18",
-      "sym": "AIRGAP",
-      "amount": 15872807.797886398,
-      "usd": 491.42212942256293,
-      "counter_usd": 493.132,
-      "n": 2,
-      "other": {
-        "ETH": 0.2
-      },
-      "first": 1789700780,
-      "last": 1789700958,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 493.132,
-      "unit": 3.106772325849399e-05
-    },
     "robinhood:0x45c94a25d951d652c2d09e9f6f7d6c0d75dd8d23:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
       "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
       "chain": "robinhood",
