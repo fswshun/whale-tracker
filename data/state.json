@@ -1,68 +1,8 @@
 {
-  "run_count": 1834,
+  "run_count": 1835,
   "last_daily": "2026-09-23",
   "cross_alerted": [],
   "buy_accum": {
-    "robinhood:0x83a49b808f8d5e02cb2931cd2352988f498e5ba3:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
-      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
-      "chain": "robinhood",
-      "contract": "0x83a49b808f8d5e02cb2931cd2352988f498e5ba3",
-      "sym": "Agrippa",
-      "amount": 130397398.98443581,
-      "usd": 7744.301525685642,
-      "counter_usd": 5428.091999999999,
-      "n": 12,
-      "other": {
-        "ETH": 2.000000000000001
-      },
-      "first": 1790109476,
-      "last": 1790109506,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 5428.091999999999,
-      "unit": 4.162730270906626e-05
-    },
-    "robinhood:0x83a49b808f8d5e02cb2931cd2352988f498e5ba3:0xe51528cfc93cacf2d22c145425a91173b24f5642": {
-      "wallet": "0xe51528cfc93cacf2d22c145425a91173b24f5642",
-      "chain": "robinhood",
-      "contract": "0x83a49b808f8d5e02cb2931cd2352988f498e5ba3",
-      "sym": "Agrippa",
-      "amount": 52511772.37660043,
-      "usd": 3118.6741614463,
-      "counter_usd": 2442.6414,
-      "n": 9,
-      "other": {
-        "ETH": 0.8999999999999999
-      },
-      "first": 1790109483,
-      "last": 1790109506,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 2442.6414,
-      "unit": 4.6516072291028896e-05
-    },
-    "robinhood:0x83a49b808f8d5e02cb2931cd2352988f498e5ba3:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
-      "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
-      "chain": "robinhood",
-      "contract": "0x83a49b808f8d5e02cb2931cd2352988f498e5ba3",
-      "sym": "Agrippa",
-      "amount": 45874460.6129996,
-      "usd": 2724.484215806046,
-      "counter_usd": 2171.2368,
-      "n": 8,
-      "other": {
-        "ETH": 0.7999999999999999
-      },
-      "first": 1790109483,
-      "last": 1790109504,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 2171.2368,
-      "unit": 4.732996902822939e-05
-    },
     "robinhood:0x67dfc7070f45695be85bcf2898f77c3aba5ad2c6:0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2": {
       "wallet": "0x3dbd530e3f75fdec00e013e26bbf95ed40b7e5c2",
       "chain": "robinhood",
