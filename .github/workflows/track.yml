@@ -1,17 +1,15 @@
 name: whale-tracker
 on:
-  schedule:
-    - cron: "*/10 * * * *"     # 10分ごと（GitHub の都合で数分遅れることあり。5分にすると無料枠を超える）
-  workflow_dispatch:           # 手動実行ボタン
+  workflow_dispatch:           # 起動は cron-job.org から10分ごと（GitHub の schedule と二重に走ると詰まるので 2026-09-23 に廃止）
 permissions:
   contents: write
 concurrency:
   group: tracker
-  cancel-in-progress: false
+  cancel-in-progress: true     # 前の実行が詰まったら捨てて最新を通す（保存は実行の最後なので捨てても次回に追いつく）
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

@@ -94,7 +94,7 @@ CROSS_MIN_USD = float(CFG.get("cross_buy_min_usd", 5000))    # 同時買いに�
 NEW_TOKEN_H = float(CFG.get("new_token_hours", 24))            # 上場からこの時間以内の銘柄を執行サービス経由で少額受け取った場合は「新規トークン受取」（エアドロップ疑い）
 NEW_TOKEN_MAX_USD = float(CFG.get("new_token_max_usd", 20000))
 CTX = {"chains": CHAINS, "known_stables": KNOWN_STABLES}
-RUN_BUDGET_S = float(CFG.get("run_budget_minutes", 18)) * 60   # これを超えたら残りは次回に回して保存だけ行う（Actions timeout 対策）
+RUN_BUDGET_S = float(CFG.get("run_budget_minutes", 8)) * 60    # これを超えたら残りは次回に回して保存だけ行う。10分間隔の次の実行と重ならない長さにする（2026-09-23 に 18 分から短縮）
 PRICE_CACHE_H = 24     # DexScreener が落ちている時に使う前回価格の有効時間
 T0 = time.time()
 def over_budget(): return time.time() - T0 > RUN_BUDGET_S
@@ -165,15 +165,25 @@ def is_lookalike(a):
 
 # ------------------------------------------------------------ HTTP 共通
 API_CALLS = defaultdict(int)   # ホスト別の呼び出し回数（無料枠の見積もり用。実行末尾でログ）
+QUOTA_WORDS = ("quota", "-32005", "exceeded", "capacity limit", "upgrade your plan")   # 無料枠を使い切った時の文言（待っても復活しない）
+_quota_hit = set()     # 無料枠切れと判明したホスト。この実行ではもう叩かない
 def http_json(method, url, retries=3, timeout=30, **kw):
-    """JSON を返す。失敗（429 / 5xx / Cloudflare challenge / 例外）は退避して再試行、最終的に None"""
+    """JSON を返す。失敗（429 / 5xx / Cloudflare challenge / 例外）は退避して再試行、最終的に None。
+       ただし「無料枠切れ」の 429 は待っても直らないので即座に諦め、そのホストは以後この実行では叩かない
+       （NodeReal の月間枠が切れた時、1回 36 秒の再試行を 37 回繰り返して実行が 25 分の上限に達し、
+         後続の実行がキャンセルされ続けて 6 日間データが止まった。2026-09-23）"""
+    host = url.split("/")[2].split("?")[0]
+    if host in _quota_hit: return None
     last = ""
     for i in range(retries):
         try:
-            API_CALLS[url.split("/")[2].split("?")[0]] += 1
+            API_CALLS[host] += 1
             r = S.request(method, url, timeout=timeout, **kw)
             if r.status_code == 429:
-                last = f"HTTP 429 {r.text[:80]!r}"; time.sleep(6 * (i + 1)); continue
+                body = r.text[:200]
+                if any(wd in body.lower() for wd in QUOTA_WORDS):
+                    _quota_hit.add(host); warn(f"{host}: 無料枠を使い切っている → この実行では以後叩かない（{body[:90]}）"); return None
+                last = f"HTTP 429 {body[:80]!r}"; time.sleep(6 * (i + 1)); continue
             if r.status_code in (500, 502, 503, 504) or r.headers.get("cf-mitigated") == "challenge":
                 last = f"HTTP {r.status_code} {r.text[:80]!r}"; time.sleep(2 * (i + 1)); continue
             if not r.ok: last = f"HTTP {r.status_code} {r.text[:120]!r}"; time.sleep(1 + i); continue
@@ -365,17 +375,24 @@ def bs_has_activity(chain, addr):
     return bool(res)
 
 # ------------------------------------------------------------ NodeReal（BSC）
+_nodereal_dead = False        # NodeReal が無料枠切れと判明したら立てる。以後この実行では Alchemy に切り替える
 def bsc_url(chain):
-    """BSC の JSON-RPC 接続先。NodeReal 優先、無ければ Alchemy"""
-    if NODEREAL_KEY: return CHAINS[chain]["rpc"].format(key=NODEREAL_KEY)
+    """BSC の JSON-RPC 接続先。NodeReal 優先、枠切れ or 未設定なら Alchemy"""
+    if NODEREAL_KEY and not _nodereal_dead: return CHAINS[chain]["rpc"].format(key=NODEREAL_KEY)
     if ALCHEMY_BNB_KEY: return CHAINS[chain]["alchemy"].format(key=ALCHEMY_BNB_KEY)
     return None
-def use_alchemy(): return not NODEREAL_KEY and bool(ALCHEMY_BNB_KEY)
+def use_alchemy(): return bool(ALCHEMY_BNB_KEY) and (_nodereal_dead or not NODEREAL_KEY)
 ALCHEMY_METHODS = {"nr_getAssetTransfers": "alchemy_getAssetTransfers", "nr_getTokenHoldings": None}
 
 def nr_rpc(chain, method, params):
+    global _nodereal_dead
     url = bsc_url(chain)
     if not url: return None
+    if NODEREAL_KEY and not _nodereal_dead and url.split("/")[2] in _quota_hit:   # 枠切れを検知 → Alchemy へ乗り換え
+        _nodereal_dead = True
+        warn("NodeReal の無料枠切れ → " + ("Alchemy に切り替えて BSC を続行" if ALCHEMY_BNB_KEY else "ALCHEMY_BNB_KEY が無いため BSC は今回取得できない"))
+        url = bsc_url(chain)
+        if not url: return None
     if use_alchemy():
         if method == "nr_getTokenHoldings": return None                      # Alchemy は別経路（alc_holdings）
         method = ALCHEMY_METHODS.get(method, method)
@@ -384,7 +401,12 @@ def nr_rpc(chain, method, params):
             params = [p]
     j = http_json("POST", url, json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
     if not isinstance(j, dict): return None
-    if "error" in j: warn(f"{chain} {method}: {j['error']}"); return None
+    if "error" in j:
+        msg = str(j["error"])
+        if any(wd in msg.lower() for wd in QUOTA_WORDS):      # HTTP 200 で返ってくる枠切れもここで拾う
+            _quota_hit.add(url.split("/")[2]); warn(f"{chain}: RPC の無料枠切れ（{msg[:90]}）")
+        else: warn(f"{chain} {method}: {msg[:140]}")
+        return None
     return j.get("result")
 
 def hx(v):
