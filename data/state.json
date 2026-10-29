@@ -1,28 +1,7 @@
 {
-  "run_count": 2676,
-  "last_daily": "2026-10-26",
+  "run_count": 2677,
+  "last_daily": "2026-10-29",
   "cross_alerted": [],
-  "buy_accum": {
-    "robinhood:0xfa00281b27e0636ebb5058958ac6403b9b821e18:0xafa0adb782345aaa73d9341f6b5c0da0afcedec6": {
-      "wallet": "0xafa0adb782345aaa73d9341f6b5c0da0afcedec6",
-      "chain": "robinhood",
-      "contract": "0xfa00281b27e0636ebb5058958ac6403b9b821e18",
-      "sym": "STOKENS",
-      "amount": 9457731.135052461,
-      "usd": 134.67809136314705,
-      "counter_usd": 185.7184,
-      "n": 1,
-      "other": {
-        "ETH": 0.08
-      },
-      "first": 1792956935,
-      "last": 1792956935,
-      "runs": 1,
-      "funding": 0.0,
-      "note": "",
-      "value": 185.7184,
-      "unit": 1.9636675789152665e-05
-    }
-  },
-  "last_daily_cut": 1792940400
+  "buy_accum": {},
+  "last_daily_cut": 1793199600
 }
